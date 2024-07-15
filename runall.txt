@@ -1,0 +1,3890 @@
+'Option Explicit
+' Define document-level variables
+
+    ' Define document-level variables to track whether each macro has been run. Copy down and modify
+    ' Dim macrowordreplaceHasRun As Boolean
+    ' Dim macrophrasesHasRun As Boolean
+Sub Runall()
+
+    ' Calls the individual programs one by one. Also need to remove it from each of the subs
+    Dim userResponse As VbMsgBoxResult
+    
+    ' Recommend the user to save before running
+    userResponse = MsgBox("This program will check your document for formatting errors based on OPNAV Manual 5215.1. It will also save the document prior to initiation and turn on track changes. Is this ok?", vbOKCancel + vbInformation, "Ancilla Policy Review")
+    
+    ' Exit if the user chooses to cancel
+    If userResponse = vbCancel Then
+        Exit Sub
+    End If
+    
+    ' Save the active document
+    ActiveDocument.Save
+    
+    ' Deselect any selected comment cards or we get an error
+    DeselectComment
+    
+    ' Call ToggleTrackChanges make sure track changes is on
+    ToggleTrackChanges
+       
+    Dim totalsteps As Integer
+    Dim currentstep As Integer
+    Dim ErrorMessages As String
+
+    ErrorMessages = "Error Report:" & vbCrLf
+
+    totalsteps = 19 'Adjust whenever you add a function below
+    
+    ' Call Paragraph marks
+    'EnsureParagraphMarksVisibility
+    
+    ' Call Font check
+    currentstep = 1
+    ErrorMessages = ErrorMessages & CheckFontAndSize2 & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Wordreplace
+    currentstep = 2
+    ErrorMessages = ErrorMessages & Wordreplace & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Promulgate
+    currentstep = 3
+    ErrorMessages = ErrorMessages & ForbiddenPhrasesWithComments & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Automaticnumbering
+    currentstep = 4
+    ErrorMessages = ErrorMessages & CheckAutomaticNumberingWithComment & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Insert Space After Period
+    currentstep = 5
+    ErrorMessages = ErrorMessages & InsertSpaceAfterPeriodWithComments & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Contractions
+    currentstep = 6
+    ErrorMessages = ErrorMessages & ReplaceContractionsAndAddComments & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Quotation Marks
+    currentstep = 7
+    ErrorMessages = ErrorMessages & CheckQuotationMarksPlacement & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Find Acronyms
+    currentstep = 8
+    ErrorMessages = ErrorMessages & FindAcronyms2 & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Find Echelon
+    currentstep = 9
+    ErrorMessages = ErrorMessages & ReplaceEchelon4 & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    'Call Underline Header Period check
+    currentstep = 10
+    ErrorMessages = ErrorMessages & CommentUnderlinedText & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    'Call Virgule check
+    currentstep = 11
+    ErrorMessages = ErrorMessages & CheckVirgules & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Number starting a sentence check
+    currentstep = 12
+    ErrorMessages = ErrorMessages & CheckPeriodNumber & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Phone Number check
+    currentstep = 13
+    ErrorMessages = ErrorMessages & CheckPhoneNumbersWithComments & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Date check
+    currentstep = 14
+    ErrorMessages = ErrorMessages & CheckDateFormats & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Required Paragraph check
+    currentstep = 15
+    ErrorMessages = ErrorMessages & RequiredParagraphs & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call margin check
+    currentstep = 16
+    ErrorMessages = ErrorMessages & margins & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call paragraph spacing check
+    currentstep = 17
+    ErrorMessages = ErrorMessages & CheckParagraphSpacing & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call paragraph spanning multiple pages
+    currentstep = 18
+    ErrorMessages = ErrorMessages & CheckParagraphSpan & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Call Header footer check
+    currentstep = 19
+    ErrorMessages = ErrorMessages & HeadersAndFootersByPage & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
+    ' Display all error messages at the end
+    MsgBox ErrorMessages, vbInformation, "Ancilla Error Report"
+    
+    ' Clear the status bar when done
+    Application.StatusBar = False
+    
+    ' Check compete message
+    MsgBox "Ancilla Policy Check completed. Please review all comments and make corrections. If you have suggestions please contact Kyle Vezina at kyle.b.vezina.ctr@health.mil.", vbInformation, "Ancilla Policy Review"
+
+    
+End Sub
+Sub UpdateProgress(currentstep As Integer, totalsteps As Integer)
+    Dim progress As Double
+    progress = currentstep / totalsteps
+    Application.StatusBar = "Progress: " & Format(progress, "0%")
+End Sub
+Function Wordreplace() As String
+    ' Adds a summary comment for each word replacement and makes the changes.
+    ' See ReplaceContractionsAndAddComments for dealing with contractions
+            
+   ' Check if the macro has been run
+    'If macrowordreplaceHasRun Then
+        ' Prompt the user before running the macro again
+        'Dim Response As VbMsgBoxResult
+        'Response = MsgBox("The Word replace macro has already been run. Do you want to run it again?", vbQuestion + vbYesNo, "Macro Warning")
+        
+        ' Check the user's response
+        'If Response = vbNo Then
+            'Exit Sub ' Exit the macro if the user chooses not to run it again
+        'End If
+    'End If
+            
+            
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges make sure track changes is on
+    'ToggleTrackChanges
+       
+    
+    Dim doc As Document
+    Dim findRng As range
+    Dim replacerng As range
+    Dim findText As String
+    Dim replaceText As String
+    Dim commenttext As String
+    Dim i As Integer
+    Dim totalCorrections As Integer
+    Dim findReplacePairs As Variant
+    Dim rng As range
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    ' Initialize the counts
+    totalCorrections = 0
+    
+    ' Define wdFindContinue if not already defined
+    Const wdFindContinue As Long = 1
+
+    findReplacePairs = Array( _
+        Array("email", "e-mail"), _
+        Array("Email", "E-mail"), _
+        Array("emailing", "e-mailing"), _
+        Array("emails", "e-mails"), _
+        Array("Emails", "E-mails"), _
+        Array("emailed", "e-mailed"), _
+        Array("Emailed", "E-mailed"), _
+        Array("website", "web site"), _
+        Array("Website", "Web site"), _
+        Array("Websites", "Web sites"), _
+        Array("websites", "web sites"), _
+        Array("NMFL", "NAVMEDFORLANT"), _
+        Array("NMFP", "NAVMEDFORPAC"), _
+        Array("NMFSC", "NAVMEDFORSUPCMD"), _
+        Array("NMRTC", "NAVMEDREADTRNCMD"), _
+        Array("NMRTU", "NAVMEDREADTRNUNIT"), _
+        Array("MEDFOR", "NAVMEDFORCOM"), _
+        Array("NavMed", "Navy Medicine"), _
+        Array("DOD", "DoD"), _
+        Array("USFF", "USFLTFORCMD") _
+    )
+    
+    ' Define the rng
+    Set rng = doc.range
+
+    ' Loop through each pair
+    For i = LBound(findReplacePairs) To UBound(findReplacePairs)
+        findText = findReplacePairs(i)(0)
+        replaceText = findReplacePairs(i)(1)
+
+        ' Use range.Find on the entire document range
+        Set findRng = doc.range
+        findRng.Find.ClearFormatting ' Clear any previous formatting settings
+
+        ' Find and replace contractions within the document range
+        Do While findRng.Find.Execute(findText, MatchCase:=True, MatchWholeWord:=True)
+            ' Set replaceRng to the found range
+            Set replacerng = findRng.Duplicate
+
+            ' Replace the contraction directly within the range
+            replacerng.text = replaceText
+
+            ' Add a comment at the location of the replacement
+            commenttext = "Replaced '" & findText & "' with '" & replaceText & "'. Per OPNAV Manual Ch 9"
+            replacerng.Comments.Add replacerng.Duplicate, commenttext
+
+            ' Collapse the findRng to the end to continue the search
+            findRng.Collapse wdCollapseEnd
+
+            ' Increment the total corrections count
+            totalCorrections = totalCorrections + 1
+        Loop
+    Next i
+  
+    ' Send the Error report text back to the main program
+    Wordreplace = totalCorrections & " instance(s) of words replaced."
+    
+    'macrowordreplaceHasRun = True
+End Function
+Function ForbiddenPhrasesWithComments() As String
+'Adds a comments in the document for words that are not allowed.
+
+   ' Check if the macro has been run
+    'If macrophrasesHasRun Then
+        ' Prompt the user before running the macro again
+        'Dim Response As VbMsgBoxResult
+        'Response = MsgBox("This highlight phrases macro has already been run. Do you want to run it again?", vbQuestion + vbYesNo, "Macro Warning")
+        
+        ' Check the user's response
+        'If Response = vbNo Then
+            'Exit Sub ' Exit the macro if the user chooses not to run it again
+        'End If
+    'End If
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+
+    ' Call ToggleTrackChanges make sure track changes is on
+    'ToggleTrackChanges
+    
+    Dim badwordcount As Integer
+    Dim doc As Document
+    
+    Set doc = ActiveDocument
+    
+    ' Initialize the counts
+    badwordcount = 0
+
+    ' Highlight and add comments for "in accordance with"
+    Call HighlightTextWithComments(doc, "in accordance with", "per, by, following, or under.", badwordcount)
+    
+    ' Highlight and add comments for "in accordance with"
+    Call HighlightTextWithComments(doc, "IAW", "per, by, following, or under. If IAW does not stand for in accordance with please ignore.", badwordcount)
+    
+    ' Highlight and add comments for "shall"
+    Call HighlightTextWithComments(doc, "shall", "will or must.", badwordcount)
+
+    ' Highlight and add comments for "promulgate, promulgated"
+    Call HighlightTextWithComments(doc, "promulgate", "issue or publish", badwordcount)
+    Call HighlightTextWithComments(doc, "promulgated", "issue or publish", badwordcount)
+    Call HighlightTextWithComments(doc, "promulgates", "issue or publish", badwordcount)
+    Call HighlightTextWithComments(doc, "promulgating", "issue or publish", badwordcount)
+
+    ' Highlight and add comments for "insure"
+    Call HighlightTextWithComments(doc, "insure", "Per OPNAV Manual Ch 9: Only use 'insure' in context of monetary insurance. Otherwise, use 'ensure'", badwordcount)
+    Call HighlightTextWithComments(doc, "insures", "Per OPNAV Manual Ch 9: Only use 'insure' in context of monetary insurance. Otherwise, use 'ensure'", badwordcount)
+    Call HighlightTextWithComments(doc, "insured", "Per OPNAV Manual Ch 9: Only use 'insure' in context of monetary insurance. Otherwise, use 'ensure'", badwordcount)
+    Call HighlightTextWithComments(doc, "insuring", "Per OPNAV Manual Ch 9: Only use 'insure' in context of monetary insurance. Otherwise, use 'ensure'", badwordcount)
+
+    
+    ' Highlight and add comments for "above, below, as follows, following"
+    Call HighlightTextWithComments(doc, "above", "Per OPNAV Manual Ch 9: The term 'above' cannot be used when referring to a specific paragraph or subparagraph. Instead, the particular paragraph(s) or subparagraph(s) must be cited.", badwordcount)
+
+    Call HighlightTextWithComments(doc, "below", "Per OPNAV Manual Ch 9: The term 'below' cannot be used when referring to a specific paragraph or subparagraph. Instead, the particular paragraph(s) or subparagraph(s) must be cited.", badwordcount)
+
+    Call HighlightTextWithComments(doc, "as follows", "Per OPNAV Manual Ch 9: The term 'as follows' cannot be used when referring to a specific paragraph or subparagraph. Instead, the particular paragraph(s) or subparagraph(s) must be cited.", badwordcount)
+
+    Call HighlightTextWithComments(doc, "following", "Per OPNAV Manual Ch 9: The term 'following' cannot be used when referring to a specific paragraph or subparagraph. Instead, the particular paragraph(s) or subparagraph(s) must be cited.", badwordcount)
+
+    ' Highlight and add comments for "personal pronouns"
+    Call HighlightTextWithComments(doc, "you", "Per OPNAV Manual Ch 9: Navy directives must be written in the third person. Personal pronouns are not allowed. Instead use,'he or she,' 'him or her,' 'it,' 'they,' 'their,' 'member,' 'Sailor,' 'Marine,' 'Service member.'", badwordcount)
+
+    Call HighlightTextWithComments(doc, "our", "Per OPNAV Manual Ch 9: Navy directives must be written in the third person. Personal pronouns are not allowed. Instead use,'he or she,' 'him or her,' 'it,' 'they,' 'their,' 'member,' 'Sailor,' 'Marine,' 'Service member.'", badwordcount)
+
+    Call HighlightTextWithComments(doc, "we", "Per OPNAV Manual Ch 9: Navy directives must be written in the third person. Personal pronouns are not allowed. Instead use,'he or she,' 'him or her,' 'it,' 'they,' 'their,' 'member,' 'Sailor,' 'Marine,' 'Service member.'", badwordcount)
+
+    Call HighlightTextWithComments(doc, "us", "Per OPNAV Manual Ch 9: Navy directives must be written in the third person. Personal pronouns are not allowed. Instead use,'he or she,' 'him or her,' 'it,' 'they,' 'their,' 'member,' 'Sailor,' 'Marine,' 'Service member.'", badwordcount)
+
+    ' Highlight and add comments for "active duty"
+    Call HighlightTextWithComments(doc, "active duty", "Per the Writing Style Guide and Preferred Usage for DoD Issuances, 'active duty' includes active duty for training. To exclude the training, use 'active duty (other than for training).' The term 'active service' is used when referring to military experience that may be credited toward promotion or retirement. Do not use 'active duty.'", badwordcount)
+
+    ' Highlight and add comments for "armed forces"
+    Call HighlightTextWithComments(doc, "armed forces", "Per the Writing Style Guide and Preferred Usage for DoD Issuances, when referring to all components of the Navy, the Marine Corps, the Army, the Air Force, and the Coast Guard, use 'Military Services' instead of using 'Armed Forces of the United States,' 'U.S. Armed Forces,' or 'Armed Services.'", badwordcount)
+
+    ' Highlight and add comments for "armed services"
+    Call HighlightTextWithComments(doc, "armed services", "Per the Writing Style Guide and Preferred Usage for DoD Issuances, when referring to all components of the Navy, the Marine Corps, the Army, the Air Force, and the Coast Guard, use 'Military Services' instead of using 'Armed Forces of the United States,' 'U.S. Armed Forces,' or 'Armed Services.'", badwordcount)
+
+    ' Highlight and add comments for "and/or"
+    Call HighlightTextWithComments(doc, "and/or", "Per the Writing Style Guide and Preferred Usage for DoD Issuances and the Federal Plain Language Guidelines, the use of “and/or” is ambiguous in documents, therefore, to avoid confusion, do not use it. In the few instances where it can be truly used, write out 'either A, or B, or both.'", badwordcount)
+
+    ' Highlight and add comments for "Military Treatment Facility"
+    Call HighlightTextWithComments(doc, "Military Treatment Facility", "Please change to Medical Treatment Facility. The acronym 'MTF' is defined by the DOD Dictionary of Military and Associated Terms as a “medical treatment facility.", badwordcount)
+
+    ' Highlight and add comments for "Military Treatment Facilities"
+    Call HighlightTextWithComments(doc, "Military Treatment Facilities", "Please change to Medical Treatment Facilities. The acronym 'MTF' is defined by the DOD Dictionary of Military and Associated Terms as a “medical treatment facility.", badwordcount)
+
+    ' Highlight and add comments for "Federal"
+    Call HighlightTextWithComments(doc, "Federal", "Federal is only capitalized when used as part of an official title like 'Federal Bureau of Investigation' and at the begginning of a sentence. Use lower case otherwise.", badwordcount)
+
+    ' Highlight and add comments for "United States"
+    Call HighlightTextWithComments(doc, "United States", "All acronyms should be spelled out on first use. The only exception is 'U.S.' when used in adjective form, such as 'U.S. Navy' and 'U.S. citizen.' If used as a noun, spell out 'United States' (per rule 9-10 of the GPO). Change United States to U.S. if applicable.", badwordcount)
+
+    ' Highlight and add comments for "Navy Medicine Regions"
+    Call HighlightTextWithComments(doc, "Navy Medicine Regions", "Please update terminology and replace with either 'Navy Medicine echelon 3 commands' or 'Naval Medical Forces Atlantic, Pacific, and Support Command.'", badwordcount)
+    
+     ' Set the flag to indicate that the macro has been run
+    'macrophrasesHasRun = True
+    
+    ' Send the Error report text back to the main program
+    ForbiddenPhrasesWithComments = badwordcount & " instance(s) of forbidden words."
+
+End Function
+Sub HighlightTextWithComments(doc As Document, searchText As String, alternative As String, badwordcount As Integer)
+    ' Called by Sub HighlightPhrasesWithComments
+    Dim rng As range
+    Set rng = doc.range
+
+    With rng.Find
+        .ClearFormatting
+        .text = searchText
+        .Replacement.ClearFormatting
+        .Replacement.Highlight = True
+        .MatchWholeWord = True ' Set this to True to match whole words only
+
+        Do While .Execute(Forward:=True, Format:=True) = True
+            'rng.HighlightColorIndex = wdYellow ' Change color as needed
+
+            Select Case searchText
+            ' Add a comment with the found text
+            Case "promulgate", "in accordance with", "shall", "IAW", "promulgates", "promulgated", "promulgating"
+            rng.Comments.Add rng, "'" & searchText & "' is not allowed per OPNAV Manual Ch 9. In lieu of use the following alternatives: " & alternative
+
+            Case Else
+            rng.Comments.Add rng, "'" & searchText & "' found. " & alternative
+            End Select
+            
+            badwordcount = badwordcount + 1
+            rng.Collapse Direction:=wdCollapseEnd
+        Loop
+    End With
+End Sub
+Function CheckAutomaticNumberingWithComment() As String
+    ' Adds a comment where there is automatic numbering
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges make sure track changes is on
+    'ToggleTrackChanges
+    
+    Dim doc As Document
+    Dim paragraph As paragraph
+    Dim para As paragraph
+    Dim i As Integer
+    Dim rng As range
+    Dim commenttext As String
+    Dim automaticNumberingCount As Integer
+    Dim fixedcount As Integer
+    
+    ' Initialize the counts
+    automaticNumberingCount = 0
+    fixedcount = 0
+    
+    ' Set the document object
+    Set doc = ActiveDocument
+    
+    ' Iterate through paragraphs
+    For Each paragraph In doc.Paragraphs
+        ' Check if the paragraph has automatic numbering
+        If paragraph.range.ListFormat.ListType <> wdListNoNumbering Then
+            ' Create a comment
+            commenttext = "Per OPNAV Manual Ch 9, do not use any automatic outline function of MS Word. Automatic outline converted to tabs. Please verify correction."
+            paragraph.range.Comments.Add range:=paragraph.range, text:=commenttext
+        
+            ' Increment the count
+            automaticNumberingCount = automaticNumberingCount + 1
+        End If
+    Next paragraph
+
+    If automaticNumberingCount > 0 Then
+        ' Loop through each paragraph in reverse order (from bottom to top). If you go top down once you copy a line the automatic numbers below change and it messes up the numbering.
+        For i = 1 To ActiveDocument.Paragraphs.count
+            Set para = ActiveDocument.Paragraphs(ActiveDocument.Paragraphs.count - i + 1)
+                ' Store the paragraph range in a temporary range variable
+                Set rng = para.range.Duplicate
+                
+            ' Check if paragraph has automatic numbering
+            If para.range.ListFormat.ListType <> wdListNoNumbering Then
+    
+                ' Convert the list format to plain text
+                rng.ListFormat.ConvertNumbersToText
+               
+                ' Copy the text with numbering to the original paragraph
+                rng.Copy
+               
+                ' Remove the automatic numbering format
+                rng.ListFormat.RemoveNumbers
+               
+                ' Increase fixed count by 1
+                fixedcount = fixedcount + 1
+            End If
+        Next i
+    End If
+        
+    ' Send the Error report text back to the main program and call the indentationpattern function
+    If automaticNumberingCount = fixedcount Then
+        CheckAutomaticNumberingWithComment = automaticNumberingCount & " instance(s) of automatic numbering." & vbCrLf & CheckIndentationPatternAndLevel & " instances of incorrect paragraph indent or formatting errors."
+    Else
+        CheckAutomaticNumberingWithComment = "Error not all Automatic numbering corrected. Please correct. "
+    End If
+    
+End Function
+Function ReplaceContractionsAndAddComments() As String
+    ' Replaces n't contractions with the full word and comments all other potential contactions ending and adds comments
+
+    Dim doc As Document
+    Dim findRng As range
+    Dim replacerng As range
+    Dim findText As String
+    Dim replaceText As String
+    Dim commenttext As String
+    Dim i As Integer
+    Dim totalCorrections As Integer
+    Dim contractionEndings As Variant
+    Dim searchRange As range
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges to make sure track changes is on
+    'ToggleTrackChanges
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    ' Initialize the counts
+    totalCorrections = 0
+
+    ' Define contractions and their replacements need Capital letters versions too.
+    ' Could remove this portion and add (n't) to the list of contraction endings which would speed up the program. Will take a lot longer to go through everything in the array.
+    Dim contractions As Variant
+    contractions = Array( _
+        Array("don’t", "do not"), Array("didn’t", "did not"), Array("isn’t", "is not"), Array("wasn’t", "was not"), _
+        Array("aren’t", "are not"), Array("weren’t", "were not"), Array("hasn’t", "has not"), Array("haven’t", "have not"), _
+        Array("hadn’t", "had not"), Array("can’t", "cannot"), Array("couldn’t", "could not"), Array("shan’t", "shall not"), _
+        Array("shouldn’t", "should not"), Array("won’t", "will not"), Array("wouldn’t", "would not"), Array("mightn’t", "might not"), _
+        Array("mustn’t", "must not"), Array("oughtn’t", "ought not"), Array("needn’t", "need not"), Array("Don't", "Do not"), _
+        Array("Didn't", "Did not"), Array("Isn't", "Is not"), Array("Wasn't", "Was not"), Array("Aren't", "Are not (also am not)"), _
+        Array("Weren't", "Were not"), Array("Hasn't", "Has not"), Array("Haven't", "Have not"), Array("Hadn't", "Had not"), _
+        Array("Can't", "Cannot"), Array("Couldn't", "Could not"), Array("Shan't", "Shall not"), Array("Shouldn't", "Should not"), _
+        Array("Won't", "Will not"), Array("Wouldn't", "Would not"), Array("Mightn't", "Might not"), Array("Mustn't", "Must not"), _
+        Array("Oughtn't", "Ought not"), Array("Needn't", "Need not"), Array("Doesn't", "Does not"), Array("doesn't", "does not"), _
+        Array("he's", "he is"), Array("she's", "she is"), Array("it's", "it is"), Array("It's", "It is"), Array("where's", "where is"), Array("what's", "what is"), Array("there's", "there is"), Array("let's", "let us") _
+        )
+    
+    ' Loop through each contraction
+    For i = LBound(contractions) To UBound(contractions)
+        findText = contractions(i)(0)
+        replaceText = contractions(i)(1)
+
+        ' Use range.Find on the entire document range
+        Set findRng = doc.range
+        findRng.Find.ClearFormatting ' Clear any previous formatting settings
+
+        ' Find and replace contractions within the document range
+        Do While findRng.Find.Execute(findText, MatchCase:=True, MatchWholeWord:=True)
+            ' Set replaceRng to the found range
+            Set replacerng = findRng.Duplicate
+
+            ' Replace the contraction directly within the range
+            replacerng.text = replaceText
+
+            ' Add a comment at the location of the replacement
+            commenttext = "Replaced '" & findText & "' with '" & replaceText & "'. Per OPNAV Manual Ch 9: Contractions must not be used in Navy directives."
+            replacerng.Comments.Add replacerng.Duplicate, commenttext
+
+            ' Collapse the findRng to the end to continue the search
+            findRng.Collapse wdCollapseEnd
+
+            ' Increment the total corrections count
+            totalCorrections = totalCorrections + 1
+        Loop
+    Next i
+    
+    ' Find other contractions
+    ' Don't look for "'s" because it will flag all the posessive words
+    contractionEndings = Array("'re", "'ve", "'ll", "'d")
+    
+    ' Set searchRange to cover the entire document range
+    Set searchRange = doc.range
+    
+    ' Loop through each contraction ending
+    Dim ending As Variant
+    For Each ending In contractionEndings
+        ' Find the contraction ending within the document range
+        Do While searchRange.Find.Execute(ending, MatchCase:=True, MatchWholeWord:=False)
+            ' Add a comment at the location of the found contraction ending
+            commenttext = "Found '" & ending & "'. Per OPNAV Manual Ch 9: Contractions must not be used in Navy directives. Please correct if a contraction."
+            searchRange.Comments.Add searchRange, commenttext
+    
+            ' Increment the total corrections count
+            totalCorrections = totalCorrections + 1
+    
+            ' Set searchRange to the end of the found text
+            searchRange.Start = searchRange.End
+        Loop
+    Next ending
+    
+    ' Send the Error report text back to the main program
+    ReplaceContractionsAndAddComments = totalCorrections & " instance(s) of contractions."
+    
+End Function
+Sub ToggleTrackChanges()
+    ' Makes sure track changes is on
+    Dim doc As Document
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Check if Track Changes is currently on
+    If ActiveDocument.TrackRevisions = False Then
+        ' If it's off, turn it on
+        ActiveDocument.TrackRevisions = True
+    End If
+End Sub
+Sub DeselectComment()
+    If ActiveDocument.Comments.count > 0 Then
+        ' Check if there is an active comment
+        If Selection.Comments.count > 0 Then
+            ' Set the focus to the main document body
+            ActiveDocument.Bookmarks("\startOfDoc").Select
+        End If
+    End If
+End Sub
+Sub EnsureParagraphMarksVisibility()
+    ' Ensure paragraph marks are visible
+    If Not ActiveWindow.View.ShowParagraphs Then
+        ' Turn on paragraph marks
+        ActiveWindow.View.ShowParagraphs = True
+    End If
+End Sub
+Function ReplaceEchelon4() As String
+    ' Replace " Echelon" with "echelon" but ignore ". Echelon" and ".  Echelon"
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges to make sure track changes are on
+    'ToggleTrackChanges
+
+    Dim doc As Document
+    Dim findRng As range
+    Dim replacerng As range
+    Dim findText As String
+    Dim replaceText As String
+    Dim commenttext As String
+    Dim totalReplacements As Integer
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    ' Initialize the counts
+    totalReplacements = 0
+
+    ' Define find and replace text
+    findText = " Echelon" ' Note the leading space
+    replaceText = " echelon"
+
+    ' Use range.Find on the entire document range
+    Set findRng = doc.range
+    findRng.Find.ClearFormatting ' Clear any previous formatting settings
+
+    ' Find and replace within the document range
+    Do While findRng.Find.Execute(findText, MatchCase:=True)
+        ' Set replaceRng to the found range
+        Set replacerng = findRng.Duplicate
+        ' Check if " Echelon" is not preceded by a period
+        If findRng.Start > 1 Then
+            If findRng.Characters.First.Previous.text <> "." And findRng.Characters.First.Previous.text <> " " Then
+                ' Replace " Echelon" with "echelon" directly within the range
+                replacerng.text = replaceText
+                
+                ' Add a comment at the location of the replacement
+                commenttext = "Replaced '" & findText & "' with '" & replaceText & "'. Per OPNAV Manual Ch 9: The term 'echelon' for Navy echelons is not capitalized, unless at the beginning of a sentence."
+                replacerng.Comments.Add replacerng.Duplicate, commenttext
+                
+                ' Collapse the findRng to the end to continue the search
+                findRng.Collapse wdCollapseEnd
+
+                ' Increment the total replacements count
+                totalReplacements = totalReplacements + 1
+            End If
+        End If
+    Loop
+    
+    ' Send the Error report text back to the main program and call the roman numeral check
+    ReplaceEchelon4 = totalReplacements & " instance(s) of 'Echelon' replaced with 'echelon'." & vbCrLf & ReplaceRomanNumeralsAfterEchelon & " instances of Roman numerals replaced with numbers."
+
+End Function
+Function CheckQuotationMarksPlacement() As String
+    ' Checks to see if quotation marks are placed after period and comma not before
+    Dim doc As Document
+    Dim rng As range
+    Dim findTextArray As Variant
+    Dim i As Long
+    Dim instancesFound As Integer
+    
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges to make sure track changes is on
+    'ToggleTrackChanges
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+
+    ' Initialize the counts
+    instancesFound = 0
+
+    ' Set up a range to iterate through the document
+    Set rng = doc.range
+
+    ' Define an array of find text
+    findTextArray = Array(""".", """ .", """ ,", """,")  ' Add more find text as needed
+
+    ' Loop through the array and find each text
+    For i = LBound(findTextArray) To UBound(findTextArray)
+        Do While rng.Find.Execute(findText:=findTextArray(i), Forward:=True)
+            ' Add a comment to the location of the found text
+            doc.Comments.Add range:=rng, text:="Per OPNAV Manual Ch 9: periods and commas always go inside quotation marks"
+
+            ' Move the range to the end of the found text to continue the search
+            rng.Collapse Direction:=wdCollapseEnd
+            
+            ' Increment the counter
+            instancesFound = instancesFound + 1
+        Loop
+
+        ' Reset the range to the beginning for the next find text
+        rng.Start = 0
+    Next i
+
+    ' Send the Error report text back to the main program
+    CheckQuotationMarksPlacement = instancesFound & " quotation issue(s)."
+    
+End Function
+Function FindAcronyms2() As String
+    ' This macro checks that the Acronyms are used correctly. Misses acronyms with spaces periods and exponents.
+    ' 1. That an acronym is only defined once
+    ' 2. If is used 3 or less times that is spelled out
+    ' 3. That an acronym is not used before it is defined
+    ' 4. That an acronym is not defined with an s
+    ' Does not check if an acronym is defined correctly; that the words before define the acronym
+    ' Tracks the count of issues in the AddCommentToAcronym in order to not count acronyms in urls.
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges to make sure track changes is on
+    'ToggleTrackChanges
+
+    Dim countDictWithParen As Object
+    Dim countDictWithoutParen As Object
+    Dim countDictWithParenS As Object
+    Dim countDictWithoutParenS As Object
+    Dim locationDictWithParen As Object
+    Dim locationDictWithoutParen As Object
+    Dim locationDictWithParenS As Object
+    Dim locationDictWithoutParenS As Object
+    Dim locationwithout As Object
+    Dim locationwith As Object
+    Dim excludedict As Object
+    Dim acronymsexclude() As Variant
+    Dim acronym As String
+    Dim regexPattern As String
+    Dim regexPatternWithoutParen As String
+    Dim regexPatternwithS As String
+    Dim regexPatternwithoutParenS As String
+    Dim regex As Object
+    Dim match As Object
+    Dim matches As Object
+    Dim startPosition As Integer
+    Dim rng As range
+    Dim key As Variant
+    Dim switchkey As Variant
+    Dim modifiedkeys As Variant
+    Dim previousword As String
+    Dim nextword As String
+    
+    ' Initialize a counter for comments
+    Dim commentcount As Integer
+    commentcount = 0
+    
+    ' Create dictionaries to store counts and locations
+    Set countDictWithParen = CreateObject("Scripting.Dictionary")
+    Set countDictWithoutParen = CreateObject("Scripting.Dictionary")
+    Set countDictWithParenS = CreateObject("Scripting.Dictionary")
+    Set countDictWithoutParenS = CreateObject("Scripting.Dictionary")
+    Set locationDictWithParen = CreateObject("Scripting.Dictionary")
+    Set locationDictWithoutParen = CreateObject("Scripting.Dictionary")
+    Set locationDictWithParenS = CreateObject("Scripting.Dictionary")
+    Set locationDictWithoutParenS = CreateObject("Scripting.Dictionary")
+    Set locationwith = CreateObject("Scripting.Dictionary")
+    Set locationwithout = CreateObject("Scripting.Dictionary")
+    
+    ' Define regular expression patterns
+    regexPattern = "\((\b([A-Z]+[A-Z0-9\/&-]+)\b)\)" ' Matches acronyms within parenthesis with at least 1 uppercase letters
+    regexPatternWithoutParen = "\b([A-Z]+[A-Z0-9\/&-]+)\b" ' Matches acronyms without parenthesis with at least 1 uppercase letters
+    regexPatternwithS = "\((\b([A-Z]+[A-Z0-9\/&-]+s)\b)\)" ' Matches acronyms with a lowercase s at the end
+    regexPatternwithoutParenS = "\b([A-Z]+[A-Z0-9\/&-]+s)\b" ' Matches acronyms with a lowercase s at the end
+
+    ' Create the dictionary of excluded acronyms
+    Set excludedict = CreateObject("Scripting.Dictionary")
+    
+    ' Initialize the array
+     acronymsexclude = Array("OPNAV", "OPNAVINST", "OPNAVNOTE", "BUMEDINST", "BUMEDNOTE", "NAVADMIN", "SECNAVINST", "SECNAVNOTE", "O-1", "O-2", "O-3", "O-4", "E-1", "E-2", "E-3", "E-4", "E-5", "E-6", "E-7", "E-8", "E-9")
+    
+    ' Add array elements to teh dictionary
+    For i = LBound(acronymsexclude) To UBound(acronymsexclude)
+        excludedict(acronymsexclude(i)) = True
+    Next i
+
+    ' Create a regex object
+    Set regex = CreateObject("VBScript.RegExp")
+    With regex
+        .Global = True
+        .IgnoreCase = False ' Make the search case-sensitive
+        .pattern = regexPattern
+    End With
+    
+    ' Find acronyms within the entire document using the regular expression
+    Set matches = regex.Execute(ActiveDocument.range.text)
+   
+    ' Loop through matches
+    For Each match In matches
+    
+        acronym = match.Submatches(0)
+        
+        ' Check if the acronym does not exist in the exclude list
+        If Not excludedict.Exists(acronym) Then
+            ' Update count dictionary for acronyms with parenthesis
+            If countDictWithParen.Exists(acronym) Then
+                ' Increment count
+                countDictWithParen(acronym) = countDictWithParen(acronym) + 1
+            Else
+                ' Add to count dictionary if not found before
+                countDictWithParen(acronym) = 1
+            End If
+            
+            ' Update location dictionary for acronyms with parenthesis
+            If Not locationDictWithParen.Exists(acronym) Then
+                ' Add to location dictionary if not found before
+                locationDictWithParen(acronym) = match.firstIndex
+            End If
+        End If
+    Next match
+    
+    ' Reset regex for acronyms without parenthesis
+    regex.pattern = regexPatternWithoutParen
+    
+    ' Find acronyms without parenthesis within the entire document using the regular expression
+    Set matches = regex.Execute(ActiveDocument.range.text)
+    
+    ' Loop through matches
+    For Each match In matches
+    
+        acronym = match.Submatches(0)
+                
+        ' Check if the acronym does not exist in the exclude list
+        If Not excludedict.Exists(acronym) Then
+            ' Update count dictionary for acronyms without parenthesis
+            If countDictWithoutParen.Exists(acronym) Then
+                ' Increment count
+                countDictWithoutParen(acronym) = countDictWithoutParen(acronym) + 1
+            Else
+                ' Add to count dictionary if not found before
+                countDictWithoutParen(acronym) = 1
+            End If
+            
+            ' Update location dictionary for acronyms without parenthesis
+            If Not locationDictWithoutParen.Exists(acronym) Then
+                ' Add to location dictionary if not found before
+                locationDictWithoutParen(acronym) = match.firstIndex
+            End If
+        End If
+    Next match
+    
+    ' Reset regex for acronyms with s
+    regex.pattern = regexPatternwithS
+    
+    ' Find acronyms within the entire document using the regular expression
+    Set matches = regex.Execute(ActiveDocument.range.text)
+
+    ' Loop through matches
+    For Each match In matches
+    
+        ' This can't be Ucase because of the lowercase s
+        acronym = match.Submatches(0)
+        
+        ' Check if the acronym does not exist in the exclude list
+        If Not excludedict.Exists(acronym) Then
+            ' Update count dictionary for acronyms with parenthesis
+            If countDictWithParenS.Exists(acronym) Then
+                ' Increment count
+                countDictWithParenS(acronym) = countDictWithParenS(acronym) + 1
+            Else
+                ' Add to count dictionary if not found before
+                countDictWithParenS(acronym) = 1
+            End If
+            
+            ' Update location dictionary for acronyms with parenthesis
+            If Not locationDictWithParenS.Exists(acronym) Then
+                ' Add to location dictionary if not found before
+                locationDictWithParenS(acronym) = match.firstIndex
+            End If
+        End If
+    Next match
+    
+    
+    ' Reset regex for acronyms without paren but with an s
+    regex.pattern = regexPatternwithoutParenS
+    
+    ' Find acronyms within the entire document using the regular expression
+    Set matches = regex.Execute(ActiveDocument.range.text)
+
+    ' Loop through matches
+    For Each match In matches
+        'This can't be Ucase because of the lowercase s
+        acronym = match.Submatches(0)
+        
+        ' Check if the acronym does not exist in the exclude list
+        If Not excludedict.Exists(acronym) Then
+            ' Update count dictionary for acronyms with parenthesis
+            If countDictWithoutParenS.Exists(acronym) Then
+                ' Increment count
+                countDictWithoutParenS(acronym) = countDictWithoutParenS(acronym) + 1
+            Else
+                ' Add to count dictionary if not found before
+                countDictWithoutParenS(acronym) = 1
+            End If
+            
+            ' Update location dictionary for acronyms with parenthesis
+            If Not locationDictWithoutParenS.Exists(acronym) Then
+                ' Add to location dictionary if not found before
+                locationDictWithoutParenS(acronym) = match.firstIndex
+            End If
+        End If
+    Next match
+    
+    ' Check for acronyms with parenthesis used 3 times or less
+    For Each key In countDictWithoutParen.Keys
+        ' Include the acronyms with s at the end in the total countcount
+        modifiedkeys = key & "s"
+        If countDictWithoutParenS.Exists(modifiedkeys) Then
+            ' Checks to see if Acronym is only used less than 3 times in the document
+            ' Need the countdictwith=1 or it highlights All Caps words. The case where there isn't a () is handled later
+            If countDictWithParen.Exists(key) Then
+                If (countDictWithoutParen(key) + countDictWithoutParenS(modifiedkeys)) < 4 Then
+                     ' Call to AddCommentToAcronym. The total acronym issue count is incremented by 1
+                     AddCommentToAcronym ActiveDocument, CStr(key), "The acronym " & key & " including " & modifiedkeys & " is used " & (countDictWithoutParen(key) + countDictWithoutParenS(modifiedkeys)) & " time(s). Per the Plain Writing Act of 2010, consider not using an acronym if it is not cited more than three times throughout the directive. If an acronym is not used more than once, it cannot be used, and only the term may be used. Exceptions are included in subparagraphs 1d(1) through 1d(5).", 0, commentcount
+                End If
+            ElseIf countDictWithParenS.Exists(modifiedkeys) Then
+                If (countDictWithoutParen(key) + countDictWithoutParenS(modifiedkeys)) < 4 Then
+                    ' Call to AddCommentToAcronym. The total acronym issue count is incremented by 1
+                    AddCommentToAcronym ActiveDocument, CStr(key), "The acronym " & key & " including " & modifiedkeys & " is used " & (countDictWithoutParen(key) + countDictWithoutParenS(modifiedkeys)) & " time(s). Per the Plain Writing Act of 2010, consider not using an acronym if it is not cited more than three times throughout the directive. If an acronym is not used more than once, it cannot be used, and only the term may be used. Exceptions are included in subparagraphs 1d(1) through 1d(5).", 0, commentcount
+                End If
+            End If
+        ElseIf countDictWithParen(key) > 0 And countDictWithoutParen(key) < 4 Then
+            ' Call to AddCommentToAcronym. The total acronym issue count is incremented by 1
+            AddCommentToAcronym ActiveDocument, CStr(key), "The acronym " & key & " is used " & countDictWithoutParen(key) & " time(s). Per the Plain Writing Act of 2010, consider not using an acronym if it is not cited more than three times throughout the directive. If an acronym is not used more than once, it cannot be used, and only the term may be used. Exceptions are included in subparagraphs 1d(1) through 1d(5).", 0, commentcount
+        End If
+    Next key
+    
+    ' Checks to see if the Acronym is defined more than once in the document
+    For Each key In countDictWithParen.Keys
+        modifiedkeys = key & "s"
+        If countDictWithParenS.Exists(modifiedkeys) Then
+            If countDictWithParen(key) + countDictWithParenS(modifiedkeys) > 1 Then
+                ' Call to AddCommentToAcronym. The total acronym issue count is incremented by 1
+                AddCommentToAcronym ActiveDocument, CStr(key), "The acronym (" & key & ") including (" & modifiedkeys & ") are defined " & countDictWithParen(key) + countDictWithParenS(modifiedkeys) & " times. Per OPNAV Manual Ch 12, acronyms are defined once.", 1, commentcount
+            End If
+        
+        ElseIf countDictWithParen(key) > 1 Then
+            ' Call to AddCommentToAcronym. The total acronym issue count is incremented by 1
+            AddCommentToAcronym ActiveDocument, CStr(key), "The acronym (" & key & ") is defined " & countDictWithParen(key) & " times. Per OPNAV Manual Ch 12, acronyms are defined once.", 1, commentcount
+        End If
+    Next key
+    
+    ' Checks for acronyms defined with an s
+    For Each key In countDictWithParenS.Keys
+        ' Don't use an s in the definition
+        ' Call to AddCommentToAcronym. The total acronym issue count is incremented by 1
+        AddCommentToAcronym ActiveDocument, CStr(key), "The acronym (" & key & ") is defined with an 's'. Per OPNAV Manual Ch 12: acronyms are not identified as a plural. Please delete the s when it is in parenthesis. " & key & " is fine but not (" & key & ")", 1, commentcount
+
+        ' Checks to see if the Acronym is defined more than once with an s in the document
+        If countDictWithParenS(key) > 1 Then
+            ' Call to AddCommentToAcronym. The total acronym issue count is incremented by 1
+            AddCommentToAcronym ActiveDocument, CStr(key), "The acronym (" & key & ") is defined " & countDictWithParenS(key) & " times. Per OPNAV Manual Ch 12: acronyms are defined once.", 1, commentcount
+        End If
+    Next key
+    
+    ' Check if acronyms without parenthesis occur before those with parenthesis
+    For Each key In locationDictWithoutParen.Keys
+        ' Checks to see if the Acronym is defined more than once in the document
+        modifiedkeys = key & "s"
+        
+        ' Check if the key exists in locationDictWithParen
+        If locationDictWithParen.Exists(key) Then
+            If locationDictWithoutParenS.Exists(modifiedkeys) Then
+                If locationDictWithoutParen(key) < locationDictWithoutParenS(modifiedkeys) Then 'check which one is higher
+                ' Check if the location of the acronym without parenthesis is before the one with parenthesis and that it appears after the header portion about 30 characters in example BUMED in the reply refer to or after Title BUMED INSTRUCTION
+                    If locationDictWithoutParen(key) < locationDictWithParen(key) And locationDictWithoutParen(key) > 6 Then
+                        'Add a comment indicating that the acronym without parenthesis occurs before the one with parenthesis is defined. The total acronym issue count is incremented by 1
+                        AddCommentToAcronym ActiveDocument, CStr(key), "The acronym " & key & " appears before (" & key & "). Per OPNAV Manual Ch 12: define acronyms at first use. There may be other instances.", 0, commentcount
+                    End If
+                Else
+                    If locationDictWithoutParenS(modifiedkeys) < locationDictWithParen(key) And locationDictWithoutParenS(modifiedkeys) > 60 Then
+                        'Add a comment indicating that the acronym without parenthesis occurs before the one with parenthesis is defined. The total acronym issue count is incremented by 1
+                        AddCommentToAcronym ActiveDocument, CStr(modifiedkeys), "The acronym " & modifiedkeys & " appears before (" & modifiedkeys & "). Per OPNAV Manual Ch 12: define acronyms at first use. There may be other instances.", 0, commentcount
+                    End If
+                End If
+            Else
+                If locationDictWithoutParen(key) < locationDictWithParen(key) And locationDictWithoutParen(key) > 60 Then
+                    ' Add a comment indicating that the acronym without parenthesis occurs before the one with parenthesis is defined. The total acronym issue count is incremented by 1
+                    AddCommentToAcronym ActiveDocument, CStr(key), "The acronym " & key & " appears before (" & key & "). Per OPNAV Manual Ch 12: define acronyms at first use. There may be other instances.", 0, commentcount
+                End If
+            End If
+        End If
+    Next key
+    
+    ' Check if acronym with an s but without parenthesis occur before those with parenthesis
+    ' Not really necessary but couldn't hurt
+    For Each key In locationDictWithoutParenS.Keys
+       ' Check if the key exists in locationDictWithParen
+        If locationDictWithParenS.Exists(key) Then
+            ' Check if the location of the acronym without parenthesis is before the one with parenthesis
+            If locationDictWithoutParenS(key) < locationDictWithParenS(key) Then
+                ' Add a comment indicating that the acronym without parenthesis occurs before the one with parenthesis is defined. The total acronym issue count is incremented by 1
+                AddCommentToAcronym ActiveDocument, CStr(key), "The acronym " & key & " appears before (" & key & "). Per OPNAV Manual Ch 12: define acronyms at first use. There may be other instances.", 0, commentcount
+            End If
+        End If
+    Next key
+    
+    ' Set the starting position to the top of the document
+    startPosition = 0
+    
+    ' Initialize the range to the beginning of the document
+    Set rng = ActiveDocument.range
+
+    ' Find the location of the underlined text "Purpose". This will help eliminate the all caps words at the beginning from consideration.
+    With rng.Find
+        .text = "Purpose"
+        .Format = True ' Consider formatting, such as underlining
+        .Font.Underline = True ' Set the underline property
+        Do While .Execute
+            If .found Then
+                startPosition = rng.Start
+                Exit Do
+            End If
+        Loop
+    End With
+    
+    ' Create a collection to hold all keys
+    Dim allKeys As New Collection
+    
+    ' Add keys from the first dictionary
+    For Each key In countDictWithoutParen.Keys
+        allKeys.Add key
+    Next key
+    
+    ' Add keys from the second dictionary
+    For Each key In countDictWithoutParenS.Keys
+        allKeys.Add key
+    Next key
+
+        ' Check for acronyms that are used but not defined in both weird and normal acronyms. Not s because they shouldn't be defined with an s anyway.
+        For Each key In allKeys
+                   
+            If locationDictWithoutParen.Exists(key) Then
+                locationwithout(key) = locationDictWithoutParen(key)
+                If locationDictWithParen.Exists(key) Then
+                    locationwith(key) = locationDictWithParen(key)
+                End If
+            Else:
+                locationwithout(key) = locationDictWithoutParenS(key)
+                switchkey = Trim(Left(key, Len(key) - 1))
+                If locationDictWithParen.Exists(switchkey) Then
+                    locationwith(key) = locationDictWithParen(switchkey)
+                Else
+                    locationwith(key) = locationDictWithParenS(key)
+                End If
+            End If
+
+            ' Check if the key exists in locationDictWithParen and the location is after all the beginning Capitalized stuff
+            If Not (locationwith.Exists(key)) And locationwithout(key) > startPosition Then
+
+                ' Check if the key is not in the list of Roman numerals
+                If InStr(1, "II III IV V VI VII VIII VIA", UCase(key)) = 0 Then
+                    Dim keyStart As Long
+                    Dim keyEnd As Long
+                    keyStart = locationwithout(key)
+                    keyEnd = keyStart + Len(key)
+
+                    Dim docLength As Long
+                    docLength = ActiveDocument.Characters.count
+
+                    ' Ensure keyEnd is within the document length
+                    If keyEnd > docLength Then
+                        keyEnd = docLength
+                    End If
+                   
+                    Dim rng3 As range
+
+                    On Error Resume Next
+                    Set rng3 = ActiveDocument.range(Start:=keyStart, End:=keyStart)
+                    On Error GoTo 0
+            
+                    ' Try to ignore tables. Not always accurate
+                    If Not rng3.Information(wdWithInTable) Then
+
+                        previousword = GetWordBefore(key)
+                        nextword = GetWordAfter(key)
+
+                        ' Check if the previous or next words are also all caps
+                        If Not (isAllCaps(previousword) And isAllCaps(nextword)) Then
+                            ' Ignore this case (do not consider as an acronym)
+                            'Call to AddCommentToAcronym. The total acronym issue count is incremented by 1
+                            AddCommentToAcronym ActiveDocument, CStr(key), "The acronym " & key & " is used but not defined.  Per OPNAV Manual Ch 12: define acronyms at first use.", 0, commentcount
+                        End If
+                    End If
+                End If
+            End If
+        Next key
+    'End If
+
+    ' Send the Error report text back to the main program and call the other acronym check
+    FindAcronyms2 = commentcount + FindAcronymsnotinbody & " acronym issue(s)."
+    
+End Function
+Sub AddCommentToAcronym(doc As Document, acronym As String, commenttext As String, indicator As Integer, commentcount As Integer)
+
+    Dim rng As range
+    Set rng = ActiveDocument.range
+    Dim rngfail As range
+    Set rngfail = doc.range(0, 0)
+    Dim text As String
+    
+    ' if indicator is 1 then we need to find every instance(Do while loop) otherwise just the first instance will do.
+    ' Sometimes word does not find the acronym even though it exists. In this case I put a comment at the top of the document
+    If indicator = 1 Then
+        text = "(" & acronym & ")"
+        With rng.Find
+            .text = text
+            .MatchCase = True ' Make the search case-sensitive
+            .MatchWholeWord = True ' Search for whole words only
+            ' Comments every instance
+            If .Execute Then
+                If Not IsInURL(rng) Then  'Check if acronym is in url
+                    Do
+                    ' Add a comment to each found instance of the acronym
+                    rng.Comments.Add range:=rng, text:=commenttext
+                    Loop While .Execute
+                    ' Increment the total comment count
+                    commentcount = commentcount + 1
+                End If
+            Else
+                ' Add a comment indicating that the acronym was not found. Word is weird the acronym was found using regex but is missed later?
+                doc.Comments.Add range:=rngfail, text:="Please search for " & text & " in the doc and correct based on OPNAV Manual guidance."
+            End If
+        End With
+    Else
+        text = acronym
+        With rng.Find
+            .text = text
+            .MatchCase = True ' Make the search case-sensitive
+            .MatchWholeWord = True ' Search for whole words only
+            ' Comments first instance
+            If .Execute Then
+                If Not IsInURL(rng) Then  'Check if acronym is in url
+                    ' Add a comment to the first instance of the acronym
+                    rng.Comments.Add range:=rng, text:=commenttext
+                    ' Increment the total comment count
+                    commentcount = commentcount + 1
+                End If
+            Else
+                ' Add a comment indicating that the acronym was not found. Word is weird the acronym was found using regex but is missed later?
+                doc.Comments.Add range:=rngfail, text:="Please search for " & text & " in the doc and correct based on OPNAV Manual guidance."
+            End If
+        End With
+    End If
+End Sub
+Function isAllCaps(word As Variant) As Boolean
+    ' Check if a word is all caps
+
+    Dim regex As Object
+    Set regex = CreateObject("VBScript.RegExp")
+
+    ' Define the pattern to match non-alphabetic characters
+    regex.pattern = "[^A-Za-z\s\r\n]"
+
+    ' Check if the input contains any non-alphabetic characters
+    If regex.test(word) Then
+        isAllCaps = False
+        Exit Function
+    End If
+
+    ' Check if the trimmed word is all in uppercase
+    isAllCaps = UCase(Trim(word)) = Trim(word)
+    
+End Function
+Function GetWordBefore(keyword As Variant) As String
+    ' Get the word before the specified position
+    Dim tempRange As range
+    Set tempRange = ActiveDocument.range
+    
+    With tempRange.Find
+            .text = keyword
+            .MatchCase = True ' Make the search case-sensitive
+            .MatchWholeWord = True ' Search for whole words only
+            ' Comments every instance
+            If .Execute Then
+                ' Move to the beginning of the current word
+                tempRange.MoveEnd Unit:=wdWord, count:=-1
+                ' Move to the beginning of the previous word
+                tempRange.MoveStart Unit:=wdWord, count:=-1
+            End If
+        End With
+    
+    GetWordBefore = Trim(tempRange.text)
+End Function
+Function GetWordAfter(keyword As Variant) As String
+    ' Get the word after the specified position
+    Dim tempRange As range
+    Set tempRange = ActiveDocument.range
+
+    With tempRange.Find
+            .text = keyword
+            .MatchCase = True ' Make the search case-sensitive
+            .MatchWholeWord = True ' Search for whole words only
+            '.Format = False
+            ' Comments every instance
+            If .Execute Then
+                tempRange.Collapse Direction:=wdCollapseEnd
+                ' Move to the end of the current word
+                tempRange.MoveStart Unit:=wdWord, count:=1
+                ' Move to the beginning of the next word
+                tempRange.MoveEnd Unit:=wdWord, count:=1
+            End If
+        End With
+    
+    GetWordAfter = Trim(tempRange.text)
+End Function
+Function FindAcronymsnotinbody() As Integer
+' Searches for Acronyms in the Subj, Encl, or Ref
+
+    ' Initialize a counter for comments
+    Dim commentCounter As Integer
+    commentCounter = 0
+
+    ' Create an array of search strings
+    Dim searchStrings As Variant
+    searchStrings = Array("Subj:", "Ref:", "Encl:")
+
+    ' Loop through each search string
+    Dim searchString As Variant
+    For Each searchString In searchStrings
+        ' Create a regex object for the current search string
+        Dim regex As Object
+        Set regex = CreateObject("VBScript.RegExp")
+        With regex
+            .Global = True
+            .IgnoreCase = True ' Make the search case-insensitive
+            .pattern = searchString
+        End With
+
+        ' Find instances of the current search string within the entire document using the regular expression
+        Dim match As Object
+        Dim matches As Object
+        Set matches = regex.Execute(ActiveDocument.range.text)
+
+        ' Loop through matches
+        For Each match In matches
+            Dim location As Long
+            location = match.firstIndex
+
+            ' Check lines after the current search string for a parenthesis
+            Dim linesAfter As String
+            Dim parenPosition As Long
+            linesAfter = GetLinesAfter(ActiveDocument.range, CStr(searchString), parenPosition, commentCounter)
+
+            ' Check if there is a parenthesis in the lines after the current search string
+            If parenPosition > 0 Then
+                ' Define a range based on the start position and length of the match
+                Dim commentrange As range
+                Set commentrange = ActiveDocument.range.Duplicate
+                commentrange.Start = location
+                commentrange.End = location + Len(match.Value)
+
+                ' Add a comment at the position of the current search string
+                ActiveDocument.Comments.Add range:=commentrange, text:="Found acronym in '" & searchString & "'. Per the Writing Style Guide and Preferred Usage for DoD Issuances, write terms out the first time they appear in the body of the text."
+                commentCounter = commentCounter + 1
+            End If
+        Next match
+    Next searchString
+    
+    FindAcronymsnotinbody = commentCounter
+End Function
+Function GetLinesAfter(rng As range, searchString As String, ByRef parenPosition As Long, commentCounter As Integer) As String
+    ' Finds the text of the subj, ref, or encl and checks if it has a acronym and spits the location back to the main program for comment
+    Dim linesAfter As range
+    Set linesAfter = rng.Duplicate
+    Dim textstring As String
+     
+    ' Find the position of the search string
+    With linesAfter.Find
+        .text = searchString
+        .Execute
+        If .found Then
+            ' Move the range to the end of the found instance
+            linesAfter.MoveStartUntil cset:=vbTab, count:=wdForward
+            'linesAfter.MoveStart Unit:=wdCharacter, count:=Len(searchString)
+        End If
+    End With
+
+    ' Move to the end of the paragraph containing the search string
+    linesAfter.MoveEnd Unit:=wdParagraph
+
+  
+   ' Stop the search when it hits the textstring
+    If searchString = "Subj:" Then
+    
+        If InStr(1, ActiveDocument.range.text, "Ref:", vbTextCompare) > 0 Then
+            textstring = "Ref:"
+        ElseIf InStr(1, ActiveDocument.range.text, "Encl:", vbTextCompare) > 0 Then
+            textstring = "Encl:"
+        Else: textstring = "Purpose"
+        End If
+    
+    ElseIf searchString = "Ref:" Then
+        If InStr(1, ActiveDocument.range.text, "Encl:", vbTextCompare) > 0 Then
+            textstring = "Encl:"
+        Else: textstring = "Purpose"
+        End If
+        
+    ElseIf searchString = "Encl:" Then
+        textstring = "Purpose"
+    End If
+
+    ' Loop to check for additional paragraphs until unindented text is found
+    Do While linesAfter.End < rng.End
+        ' Remember the current position
+        Dim currentPosition As Long
+        currentPosition = linesAfter.End
+    
+        ' Move to the end of the next paragraph
+        linesAfter.MoveEnd Unit:=wdParagraph
+    
+        If InStr(1, linesAfter.text, textstring, vbTextCompare) > 0 Then
+            ' Move back up to the end of the previous line
+            linesAfter.End = currentPosition
+            Exit Do ' Exit the loop if indentation levels are different
+        End If
+    Loop
+    
+    ' Set up a regular expression pattern for finding the opening parenthesis
+    Dim regexPattern As String
+    regexPattern = "\((\b[A-Z]{2,}\b)\)"
+    
+    ' Create a regex object
+    Dim regex As Object
+    Set regex = CreateObject("VBScript.RegExp")
+    With regex
+        .Global = True
+        .IgnoreCase = False ' Make the search case-sensitive
+        .pattern = regexPattern
+    End With
+    
+    ' Execute the regex pattern on the text
+    Dim matches As Object
+    Set matches = regex.Execute(linesAfter.text)
+    
+    ' Check if there is a match and get the position of the opening parenthesis
+    If matches.count > 0 Then
+        parenPosition = matches(0).firstIndex + 1 ' Add 1 to get the position of the first character in the match
+    Else
+        parenPosition = 0 ' Set to 0 if no match is found
+    End If
+    
+    'Check to see if Subj is all caps
+    If searchString = "Subj:" And UCase(linesAfter.text) <> linesAfter.text Then
+        'Change subject to all caps
+        linesAfter.text = UCase(linesAfter.text)
+        ActiveDocument.Comments.Add range:=linesAfter, text:="Lower case letter found in the subject and capitalized. Per OPNAV Man Ch 9: The subjects of directives are written in all capitalizations. Please verify."
+        commentCounter = commentCounter + 1
+    End If
+    
+    'It is recommended that the Subject be 10 words or less
+    ' Splits the text into words and counts the number of words
+    Dim words() As String
+    Dim Countwords As Integer
+    words = Split(linesAfter.text, " ")
+    Countwords = UBound(words) + 1
+    
+    If searchString = "Subj:" And Countwords > 10 Then
+        ActiveDocument.Comments.Add range:=linesAfter, text:="The subject contains more than 10 words. Per OPNAV Man Ch 9: The subject should be descriptive but concise (try to use 10 words or less)."
+        commentCounter = commentCounter + 1
+    End If
+End Function
+Function InsertSpaceAfterPeriodWithComments() As String
+    ' This macro adds in a second space after a period or colon if it only has one space. Adds one space after semi colon and ). It also adds in a comment
+    ' Flags instances with 3 or more spaces after a period.
+
+    Dim doc As Document
+    Dim rng As range
+    Dim found As Boolean
+    Dim periodPositions As Collection
+    Dim colonPositions As Collection
+    Dim parenPositions As Collection
+    Dim semicolonPositions As Collection
+    Dim position As Variant
+    Dim insertionoffset As Long
+    Dim totalSpacesAdded As Integer
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges to make sure track changes is on
+    'ToggleTrackChanges
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    'Initialize count
+    totalSpacesAdded = 0
+
+    ' Set up the range to iterate through the document
+    Set rng = doc.Content
+
+    ' Initialize the collection to store positions of found periods
+    Set periodPositions = New Collection
+
+    ' Find the first occurrence of a period
+    found = rng.Find.Execute(findText:=".", Forward:=True)
+    
+    ' Loop through all occurrences of periods in the document
+    Do While found
+        ' Check if there's a space and a capital letter after the period
+        If Not (rng.Characters.Last.Next Is Nothing Or rng.Characters.Last.Next.Next Is Nothing) Then
+            If rng.Characters.Last.Next = " " And rng.Characters.Last.Next.Next Like "[A-Z]" Then
+            ' Check if the three characters before the period form "U.S" skip U.S., skip Someone's initials R. L.
+                If Not (rng.Characters.Last.Previous.Previous.Previous.text & rng.Characters.Last.Previous.Previous.text & rng.Characters.Last.Previous.text Like "*[A-Z].[A-Z]*") Then
+                    If Not (rng.Characters.Last.Previous.Previous.Previous.Previous.text & _
+                    rng.Characters.Last.Previous.Previous.Previous.text & _
+                    rng.Characters.Last.Previous.Previous.text & _
+                    rng.Characters.Last.Previous.text Like "*[A-Z]. [A-Z]*") Then
+                        If Not (rng.Characters.Last.text & _
+                        rng.Characters.Last.Next.text & _
+                        rng.Characters.Last.Next.Next.text & _
+                        rng.Characters.Last.Next.Next.Next.text Like "*. [A-Z].*") Then
+                            
+                            'check that it isn't underlined. Don't want James P. Norton to be changed in a header.
+                            If rng.Characters(1).Font.Underline <> 1 Then
+
+                                ' Store the position of the found period adjusted by the insertion offset
+                                periodPositions.Add rng.Start + insertionoffset
+                                ' Increment the insertion offset by 1 for the next iteration
+                                insertionoffset = insertionoffset + 1
+                    
+                                ' Add a comment indicating the space is added after the period
+                                doc.Comments.Add range:=rng.Characters.Last.Next, text:="Per OPNAV Manual Ch 9: 2 spaces are required after a period. A second space was added after the period. Please verify."
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+       End If
+
+        ' Error handling if we any of those next characters don't exist. check if we hit the end of the document
+        If rng.Next.End <> ActiveDocument.range.End Then
+            If rng.Next.Next.End <> ActiveDocument.range.End Then
+                If rng.Next.Next.Next.End <> ActiveDocument.range.End Then
+                    If rng.Characters.Last.Next = " " And rng.Characters.Last.Next.Next = " " And rng.Characters.Last.Next.Next.Next = " " Then
+                        ' Add a comment indicating the space is added after the period
+                        doc.Comments.Add range:=rng.Characters.Last.Next, text:="At least, 3 spaces after a period were found. Per OPNAV Manual Ch 9: 2 spaces are required after a period. Please verify and correct if applicable."
+                    
+                    End If
+                End If
+             End If
+        End If
+         
+        ' Find the next occurrence of a period
+        found = rng.Find.Execute(findText:=".", Forward:=True)
+    Loop
+
+    ' Process the stored positions and insert spaces after the periods
+    For Each position In periodPositions
+        doc.range(position + 1, position + 1).InsertAfter " "
+        ' Increment the total count of spaces added
+        totalSpacesAdded = totalSpacesAdded + 1
+    Next position
+    
+    ' Reinitialize the range to iterate through the document
+    Set rng = doc.Content
+    insertionoffset = 0
+    
+    ' Initialize the collection to store positions of found colons
+    Set colonPositions = New Collection
+    
+    ' Find the first occurrence of a colon
+    found = rng.Find.Execute(findText:=":", Forward:=True)
+
+    ' Loop through all occurrences of colons in the document
+    Do While found
+        ' Check if there's a space and a capital letter after the colon
+        If rng.Characters.Last.Next = " " And rng.Characters.Last.Next.Next Like "[a-zA-Z]" Then
+            '(rng.Characters.Last.Previous.text Like "*[A-Z]. [A-Z]*")
+            ' Store the position of the found period adjusted by the insertion offset
+            colonPositions.Add rng.Start + insertionoffset
+            ' Increment the insertion offset by 1 for the next iteration
+            insertionoffset = insertionoffset + 1
+
+            ' Add a comment indicating the space is added after the colon
+            doc.Comments.Add range:=rng.Characters.Last.Next, text:="Per OPNAV Manual Ch 9: 2 spaces are required after a colon. A second space was added after the colon. Please verify."
+        End If
+
+        ' Find the next occurrence of a colon
+        found = rng.Find.Execute(findText:=":", Forward:=True)
+    Loop
+
+    ' Process the stored positions and insert spaces after the colons
+    For Each position In colonPositions
+        doc.range(position + 1, position + 1).InsertAfter " "
+        ' Increment the total count of spaces added
+        totalSpacesAdded = totalSpacesAdded + 1
+    Next position
+    
+    ' Reinitialize the range to iterate through the document
+    Set rng = doc.Content
+    insertionoffset = 0
+    
+    ' Initialize the collection to store positions of found )
+    Set parenPositions = New Collection
+    
+    ' Find the first occurrence of a colon
+    found = rng.Find.Execute(findText:=")", Forward:=True)
+
+    ' Loop through all occurrences of colons in the document
+    Do While found
+        ' Check if there's a space and a capital letter after the ) and another ( or ) like (a)(1), (Budget Submitting Office (BSO)) unless end of a sentence, following a comma, following a tab, following a non-printing character(non breaking space) etc.
+        If rng.Characters.Last.Next <> "." And rng.Characters.Last.Next <> "(" And rng.Characters.Last.Next <> ")" And rng.Characters.Last.Next <> " " And rng.Characters.Last.Next <> "," And rng.Characters.Last.Next <> ";" And rng.Characters.Last.Next <> ":" And rng.Characters.Last.Next <> vbTab And rng.Characters.Last.Next <> vbCr And rng.Characters.Last.Next <> "]" And AscW(rng.Characters.Last.Next.text) <> 13 Then
+            ' Store the position of the found period adjusted by the insertion offset
+            parenPositions.Add rng.Start + insertionoffset
+            ' Increment the insertion offset by 1 for the next iteration
+            insertionoffset = insertionoffset + 1
+
+            ' Add a comment indicating the space is added after the )
+            doc.Comments.Add range:=rng.Characters.Last.Next, text:="Per OPNAV Manual Ch 9: 1 space after ')' is required. Please verify."
+        End If
+
+        ' Find the next occurrence of a period
+        found = rng.Find.Execute(findText:=")", Forward:=True)
+    Loop
+
+    ' Process the stored positions and insert spaces after the )
+    ' Commented because lots of instances where this is not needed so easier for user to input
+    'For Each position In parenPositions
+        'doc.Range(position + 1, position + 1).InsertAfter " "
+        ' Increment the total count of spaces added
+        'totalSpacesAdded = totalSpacesAdded + 1
+    'Next position
+    
+    ' Reinitialize the range to iterate through the document
+    Set rng = doc.Content
+    insertionoffset = 0
+    
+    ' Initialize the collection to store positions of found semi colon
+    Set semicolonPositions = New Collection
+    
+    ' Find the first occurrence of a semicolon
+    found = rng.Find.Execute(findText:=";", Forward:=True)
+
+    ' Loop through all occurrences of colons in the document
+    Do While found
+        ' Check if there's a space and a capital letter after the semicolon
+        If rng.Characters.Last.Next <> " " And rng.Characters.Last.Next <> vbCr Then
+            '(rng.Characters.Last.Previous.text Like "*[A-Z]. [A-Z]*")
+            ' Store the position of the found period adjusted by the insertion offset
+            semicolonPositions.Add rng.Start + insertionoffset
+            ' Increment the insertion offset by 1 for the next iteration
+            insertionoffset = insertionoffset + 1
+
+            ' Add a comment indicating the space is added after the semicolon
+            doc.Comments.Add range:=rng.Characters.Last.Next, text:="Per OPNAV Manual Ch 9: 1 space after ';' are required. A space was added after the semicolon. Please verify."
+        End If
+
+        ' Find the next occurrence of a semi colon
+        found = rng.Find.Execute(findText:=";", Forward:=True)
+    Loop
+
+    ' Process the stored positions and insert spaces after the semicolon
+    For Each position In semicolonPositions
+        doc.range(position + 1, position + 1).InsertAfter " "
+        ' Increment the total count of spaces added
+        totalSpacesAdded = totalSpacesAdded + 1
+    Next position
+    
+    ' Send the Error report text back to the main program
+    InsertSpaceAfterPeriodWithComments = totalSpacesAdded & " space(s) were added after periods, colons, right parenthesis, and semicolons."
+
+End Function
+Function ReplaceRomanNumeralsAfterEchelon() As Integer
+    ' Replaces Roman numerals after "echelon" with corresponding numbers
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges to make sure track changes are on
+    'ToggleTrackChanges
+
+    Dim doc As Document
+    Dim findRng As range
+    Dim replacerng As range
+    Dim findText As String
+    Dim commenttext As String
+    Dim totalReplacements As Integer
+    Dim nextword As String
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+
+    'Initialize count
+    totalReplacements = 0
+    
+    ' Define find text
+    findText = "echelon"
+
+    ' Use range.Find on the entire document range
+    Set findRng = doc.range
+    findRng.Find.ClearFormatting ' Clear any previous formatting settings
+
+    ' Find and replace within the document range
+    Do While findRng.Find.Execute(findText, MatchCase:=False)
+        ' Set replaceRng to the found range
+        Set replacerng = findRng.Duplicate
+
+        ' Get the next word after "echelon"
+        nextword = GetNextWordAfter(findRng)
+
+        ' Check if the next word is a Roman numeral
+        If IsRomanNumeral(nextword) Then
+            ' Replace Roman numeral with a number
+            replacerng.Collapse wdCollapseEnd
+            replacerng.MoveEnd wdWord, 2
+            replacerng.text = " " & RomanToArabicDirect(nextword) & " "
+
+
+            ' Add a comment at the location of the replacement
+            commenttext = "Replaced Roman numeral '" & nextword & "' with " & RomanToArabicDirect(nextword) & ". Per OPNAV Manual Ch 9: echelon levels are identified with Arabic numerals (1, 2, 3), not Roman numerals (I, II, III) (e.g., echelon 4, not Echelon IV)."
+            replacerng.Comments.Add replacerng.Duplicate, commenttext
+
+            ' Increment the total replacements count
+            totalReplacements = totalReplacements + 1
+        End If
+
+        ' Collapse the findRng to the end to continue the search
+        findRng.Collapse wdCollapseEnd
+    Loop
+    
+    ReplaceRomanNumeralsAfterEchelon = totalReplacements
+    
+End Function
+Function GetNextWordAfter(rng As range) As String
+    ' Get the next word after the specified range
+    Dim nextword As String
+    Dim i As Integer
+
+    ' Set the range to the end of the current word
+    rng.MoveEnd wdWord, 1
+
+    ' Move to the start of the next word
+    rng.Collapse wdCollapseEnd
+
+    ' Find the start of the next word
+    Do While rng.words.count = 0
+        rng.MoveEnd wdWord, 1
+    Loop
+
+    ' Extract the next word and trim any leading or trailing spaces
+    nextword = Trim(rng.words(1))
+
+    GetNextWordAfter = nextword
+    'MsgBox ":" & nextWord & ":"
+End Function
+Function IsRomanNumeral(s As String) As Boolean
+    ' Check if the given string is a Roman numeral
+    Dim romanNumerals As Variant
+    Dim i As Integer
+    'MsgBox s
+
+    ' Define the values of Roman numerals
+    romanNumerals = Array("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X")
+
+    ' Check if the given string is in the list of Roman numerals
+    For i = LBound(romanNumerals) To UBound(romanNumerals)
+        If UCase(s) = UCase(romanNumerals(i)) Then
+            'MsgBox UCase(romanNumerals(i))
+            IsRomanNumeral = True
+            Exit Function
+        End If
+    Next i
+
+    IsRomanNumeral = False
+End Function
+Function RomanToArabicDirect(s As String) As Integer
+    ' Convert a Roman numeral to an Arabic number directly
+    Select Case UCase(s)
+        Case "I": RomanToArabicDirect = 1
+        Case "II": RomanToArabicDirect = 2
+        Case "III": RomanToArabicDirect = 3
+        Case "IV": RomanToArabicDirect = 4
+        Case "V": RomanToArabicDirect = 5
+        Case "VI": RomanToArabicDirect = 6
+        Case "VII": RomanToArabicDirect = 7
+        Case "VIII": RomanToArabicDirect = 8
+        Case "IX": RomanToArabicDirect = 9
+        Case "X": RomanToArabicDirect = 10
+        ' Add more cases for additional Roman numerals if needed
+        Case Else: RomanToArabicDirect = 0 ' Default to 0 if not a recognized Roman numeral
+    End Select
+End Function
+Function CommentUnderlinedText() As String
+    ' This macro looks for main Titles and Headers and sees whether a period should follow them or not and if the underline words should be capitalized or not.
+    ' Also checks whether the period is underlined or if the title is on another page than the header
+    ' Checks that paragraph text is not on a different page then the title/header
+
+    Dim doc As Document
+    Dim rng As range
+    Dim foundRange As range
+    Dim punderlinecount As Integer
+    Dim startPosition As Long
+    Dim endposition As Long
+    Dim words() As String
+    Dim excludedWords As String
+    Dim word As Variant
+    Dim caprng As range
+    Dim isFirstWord As Boolean
+    Dim pagerange As range
+    Dim periodundrange As range
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Call ToggleTrackChanges make sure track changes is on
+    'ToggleTrackChanges
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+
+    ' Initialize punderlinecount
+    punderlinecount = 0
+
+    ' Set up the initial range
+    Set rng = doc.range
+
+    ' Find the location of the underlined text "Purpose". This is the starting point. We want to avoid underlined text before Purpose.
+    With rng.Find
+        .text = "Purpose"
+        .Format = True ' Consider formatting, such as underlining
+        .Font.Underline = True ' Set the underline property
+        Do While .Execute
+            If .found Then
+                ' Set the starting position to the position of the found text
+                startPosition = rng.Start - 1
+                ' Set the ending position just before the end of the found text
+                endposition = rng.End - Len("Purpose") - 1
+                Exit Do
+            End If
+        Loop
+    End With
+
+    ' Set up the Range object starting from the adjusted position if purpose is found
+    If startPosition = 0 Then
+        ' If not found, set the starting position to the top of the document
+        startPosition = 0
+        endposition = 0
+    Else
+        rng.Start = startPosition
+        rng.End = endposition
+    End If
+
+    ' Set up the Find object to search for underlined text
+    With rng.Find
+        .ClearFormatting
+        .Font.Underline = True
+        .text = ""
+        .Forward = True
+        .Wrap = wdFindStop
+        Do While .Execute
+            
+            ' Check that the rng value is underlined. Sometimes it is not, and you need to skip that result
+            Do While UCase(rng.Font.Underline) <> True
+                rng.Collapse Direction:=wdCollapseEnd
+                rng.MoveEnd wdCharacter, 1
+            Loop
+
+            'check if we hit the end of the document
+            If rng.End = ActiveDocument.range.End Then
+                Exit Do
+            End If
+
+            ' Select the whole underlined range
+            Do While rng.End < ActiveDocument.range.End
+                If Not (rng.Characters.Last.Next Is Nothing) And _
+                    UCase(rng.Characters.Last.Next.Font.Underline) = True And _
+                    rng.Characters.Last.Next <> vbCr And _
+                    rng.Characters.Last.Next <> vbLf Then
+                    rng.MoveEnd wdCharacter, 1
+                Else
+                    Exit Do ' Exit the loop if there is no next character
+                End If
+            Loop
+
+            ' Exit the outer loop if there are no more underlined words
+            If Not rng.Find.found Then
+                Exit Do
+            End If
+
+            'check that the rng is underlined. Word is weird so you have to double check
+            If UCase(rng.Font.Underline) = True Then
+                ' Set foundRange to the underlined text
+                Set foundRange = rng.Duplicate
+            Else
+                ' Move the range to the end of the current word within foundRange
+                rng.Collapse Direction:=wdCollapseEnd
+            End If
+            
+
+            ' Check to see if the found text is a website,email, blank text, or a carriage or line break. Skips processing for this underlined text if its a url
+            If Left(foundRange.text, 4) <> "http" And InStr(foundRange.text, "@") = 0 And (foundRange.text <> "" And (foundRange.text <> vbCr And foundRange.text <> vbLf)) Then
+                
+                'Check if each word is capitalized, excluding helper words
+                ' Duplicate the original range
+                Set caprng = rng.Duplicate
+                
+                ' List of excluded words (add more if needed)
+                excludedWords = "if,but,with,a,an,the,by,for,in,to,and,of,will,must"
+                
+                ' Split the text content into an array of words
+                words = Split(caprng.text, " ")
+                
+                ' Initialize flag for the first word
+                isFirstWord = True
+
+                ' Check each word for capitalization, excluding specified words
+                For Each word In words
+                
+                    ' Check if the word is already in all caps
+                    Dim isAllCaps As Boolean
+                    Dim isexcluded As Boolean
+                    isAllCaps = UCase(word) = word
+                    
+                    If Not isAllCaps Then
+                
+                    'MsgBox word
+                    ' Check if it is excluded from capitalization
+                    If Not isFirstWord Then
+                        isexcluded = InStr(1, "," & excludedWords & ",", "," & LCase(word) & ",") > 0
+                    Else
+                        isexcluded = False
+                        ' Reset flag for subsequent words
+                        isFirstWord = False
+                    End If
+                    
+                    ' Check if the word is capitalized
+                    If Len(word) > 0 Then
+                        If Left(word, 1) <> UCase(Left(word, 1)) Then
+                    
+                            If isexcluded = False Then
+                                caprng.Comments.Add caprng, "Please capitalize '" & word & "'. Per OPNAV Manual Ch 9: When underlined, the initial letters of the first and main words must be capitalized."
+                                ' Increase comment count by 1
+                                punderlinecount = punderlinecount + 1
+                            End If
+
+                            ElseIf isexcluded Then
+                                'Lowercase the word
+                                caprng.Comments.Add caprng, "Do not capitalize '" & word & "'. Per OPNAV Manual Ch 9: Do not capitalize definite or indefinite articles (e.g., a, an, the), prepositions (e.g., by, for, in, to) or conjunctions (e.g., and, but, if), except as the first word of a title or header."
+                                ' Increase comment count by 1
+                                punderlinecount = punderlinecount + 1
+                            End If
+                        End If
+                    End If
+                Next word
+                
+                ' Check if period is underlined range.
+                Set periodundrange = foundRange.Duplicate
+                
+                ' Check if colon is underlined. No specific rule on colons in headers and titles but they appear in BUMEDINST 5060.1, BUMEDINST 1500.32A, BUMEDINST 1300.8
+                If foundRange.Characters.Last.text = ":" And InStr(foundRange.text, ":") > 0 Then
+                    foundRange.Comments.Add range:=foundRange, text:="Colon should not be underlined. Check comments for additional actions."
+                End If
+
+                ' Check if there is a next character and if it is a period
+                If Not foundRange.Characters.Last.Next Is Nothing Then
+                
+                    ' check that the title is not on a different page than the paragraph text
+                    ' Duplicate the original range
+                    Set pagerange = foundRange.Duplicate
+                    'Loop untill a character is found
+                    Do While Len(pagerange.Characters.Last.Next) > 0 And (Not (pagerange.Characters.Last.Next Like "[A-Za-z]"))
+                        pagerange.MoveEnd wdCharacter, 1
+                        'MsgBox pagerange.Characters.Last.Next
+                    Loop
+                    ' Check if there is a next next character
+                    If Not pagerange.Characters.Last.Next.Next Is Nothing Then
+                        'check that the paragraph text does not have a bigger page number than the title
+                        If pagerange.Characters.Last.Next.Next.Information(wdActiveEndAdjustedPageNumber) > pagerange.Characters.Last.Information(wdActiveEndAdjustedPageNumber) Then
+                            ' Add a comment
+                            pagerange.Comments.Add range:=pagerange, text:="Per OPNAV Manual Ch 2: Do not separate paragraph headers from their text."
+                            
+                            'Increase comment count by 1
+                            punderlinecount = punderlinecount + 1
+                        End If
+                    End If
+                
+                    If foundRange.Characters.Last.Next.text = "." Then
+                        foundRange.MoveEnd wdCharacter, 1
+
+                        ' Move right until hitting text or carriage return
+                        Do While Len(foundRange.Characters.Last.Next) > 0 And (Not (foundRange.Characters.Last.Next Like "[A-Za-z]") And foundRange.Characters.Last.Next <> vbCr)
+                            foundRange.MoveEnd wdCharacter, 1
+                        Loop
+
+                        ' If next character is a carriage return then you don't need a period
+                        If foundRange.Characters.Last.Next = vbCr Then
+                            ' Add a comment indicating no period is needed
+                            foundRange.Comments.Add range:=foundRange, text:="Please delete the period at the end of the underlined title/header. Per OPNAV Manual Ch 9: If the title or header stands alone, the period is omitted."
+                            
+                            'Increase comment count by 1
+                            punderlinecount = punderlinecount + 1
+                        End If
+                    Else
+                        ' No particular rule on colons as they are used when the header stands alone and with text righ after. Ignore cases with colon as last character in underline
+                        If foundRange.Characters.Last.Next.text <> ":" Then
+                            ' Move right until hitting text or carriage return
+                            Do While Len(foundRange.Characters.Last.Next) > 0 And (Not (foundRange.Characters.Last.Next Like "[A-Za-z]") And foundRange.Characters.Last.Next <> vbCr)
+                                foundRange.MoveEnd wdCharacter, 1
+                            Loop
+    
+                            If foundRange.Characters.Last.Next Like "[A-Za-z]" Then
+                                ' Ignore cases with names liek James P. Norton where there is a period underlined but its not the last character
+                                If periodundrange.Characters.Last.text = "." And InStr(periodundrange.text, ".") > 0 Then
+                                    periodundrange.Comments.Add range:=periodundrange, text:="Please remove underlining from period. Per OPNAV Manual Ch 9: The period is not underlined."
+                                    punderlinecount = punderlinecount + 1
+                                Else
+                                    foundRange.Comments.Add range:=foundRange, text:="Please add a period at the end of the underlined title. Per OPNAV Manual C 9: Titles and headers are followed by a period only if the text of the paragraph or subparagraph immediately follows the header or title. (Please Note: The period is not underlined.)"
+                                    punderlinecount = punderlinecount + 1
+                                End If
+                                
+                            Else
+                            ' this most likely means there is a carriage return and then text so we have to add previous.text to get the period
+                            ' Ignore cases with names liek James P. Norton where there is a period underlined but its not the last character
+                                If (periodundrange.Characters.Last.text = "." Or periodundrange.Characters.Last.Previous.text = ".") And InStr(periodundrange.text, ".") > 0 Then
+                                    periodundrange.Comments.Add range:=periodundrange, text:="Per OPNAV Manual Ch 9: Remove underlined period. If the title or header stands alone, the period is omitted."
+                                    punderlinecount = punderlinecount + 1
+                                End If
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+
+            ' After processing, set rng.Start = foundRange.End
+            If Not foundRange Is Nothing Then
+                rng.Start = foundRange.End
+            End If
+
+        Loop
+    End With
+      
+    ' Send the Error report text back to the main program
+    CommentUnderlinedText = punderlinecount & " instance(s) of Title/Header period or captitalization issues."
+    
+End Function
+Function CheckFontAndSize2() As String
+    ' Checks that font is unbolded, all black, Times New Roman, and size 12.
+
+    Dim para As paragraph
+    Dim commentCounter As Integer
+    Dim doc As Document
+    Dim rng As range
+       
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    ' Initialize count
+    commentCounter = 0
+
+    ' Set the range to the entire document
+    Set rng = doc.range
+
+    ' Loop through each paragraph in the active document
+    For Each para In doc.Paragraphs
+        ' Check if the paragraph is within a table
+        If Not para.range.Information(wdWithInTable) Then
+            ' Check font name and size
+            If para.range.Font.Name <> "Times New Roman" Then
+
+                ' Set the font to Times New Roman
+                para.range.Font.Name = "Times New Roman"
+                
+                ' Add a comment to the entire paragraph for nonconforming font or size
+                para.range.Comments.Add range:=para.range, text:="The font in this paragraph was changed to Times New Roman. The only authorized font for Navy directives is Times New Roman, font size 12. Exceptions may exist for letterheads."
+
+                ' Increment the comment counter
+                commentCounter = commentCounter + 1
+            End If
+            
+             If para.range.Font.Size <> 12 Then
+             
+                ' Set the font to size 12
+                para.range.Font.Size = 12
+             
+                ' Add a comment to the entire paragraph for nonconforming font or size
+                para.range.Comments.Add range:=para.range, text:="The font in this paragraph was changed to size 12. The only authorized font for Navy directives is Times New Roman, font size 12. Exceptions may exist for letterheads."
+
+                ' Increment the comment counter
+                commentCounter = commentCounter + 1
+            End If
+        End If
+            ' For some reason wdAuto is not the same as RGB(0,0,0)
+            ' Check if the paragraph font color is not black
+            ' if a paragraph has a url and other parts of the paragraph have color it won't catch it
+            If para.range.Font.Color <> RGB(0, 0, 0) Then
+            
+                If para.range.Font.ColorIndex <> wdAuto Then
+                ' if para.Range.Font.Colorindex <>wdBlack
+                    ' Don't change hyperlink color
+                    If InStr(para.range.text, "http") = 0 Then
+                        ' Change font color to black
+                        para.range.Font.Color = 0
+                        
+                        ' Display a message box with the bold paragraph and its font color
+                        para.range.Comments.Add range:=para.range, text:="Non black text found; text was corrected to black font. Per OPNAV Manual Ch 9: The use of colors in directives, such as in graphs, tables, charts, etc., should be avoided. Colors tend to result in larger than desired PDFs of published versions causing delays and difficulties in downloading."
+                
+                        ' Increment the comment counter
+                        commentCounter = commentCounter + 1
+                    End If
+                End If
+            End If
+    Next para
+    
+        ' Check for bolded text. Can't use para.range.font.bold because it checks for the whole paragraph being bolded and not indvidual words.
+        ' Set range to the entire document
+        ' Search for bold text
+        With rng.Find
+            .ClearFormatting
+            .Font.Bold = True
+            .Forward = True
+            .Wrap = wdFindStop
+            'Execute the find operation
+            Do While .Execute
+                ' Display a message box with the bold paragraph and its font color
+                rng.Comments.Add range:=rng, text:="Text was unbolded. Per OPNAV Manual Ch 9: Do not use bold text in the letter of a directive and refrain from using it in enclosurse, attachments, etc. For emphasis, use underline instead. However, the use of bold in the cover of a manual-type instruction for the subject of the instruction is allowed."
+                ' unbold
+                rng.Font.Bold = False
+                ' Increment the comment counter
+                commentCounter = commentCounter + 1
+            Loop
+        End With
+
+    ' Send the Error report text back to the main program
+    CheckFontAndSize2 = commentCounter & " nonconforming paragraph(s)(font type and size)."
+End Function
+Function CheckVirgules() As String
+    ' Checks document for Virgules
+    Dim doc As Document
+    Dim rng As range
+    Dim regex As Object
+    Dim commenttext As String
+    Dim commentcount As Integer
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    ' initialize commentcount to 0
+    commentcount = 0
+
+    ' Set up the initial range as the entire document
+    Set rng = doc.range
+
+    ' Define comment text
+    commenttext = "Per the Writing Style Guide and Preferred Usage for DoD Issuances and the Federal Plain Language Guidelines, do not use virgules ('/') when they can be replaced with 'and' or 'or.' Please see OPNAV Manual Ch 9 for exceptions."
+
+
+        ' Find virgules "/" not part of a URL
+        With rng.Find
+            .ClearFormatting
+            .text = "/"
+            .Forward = True
+            .Wrap = wdFindStop
+            Do While .Execute
+                ' Check if the "/" is part of a URL and not surrounded by numbers liek 5215/40
+                Dim rngnumber As range
+                ' duplicate the range and expand by one in either direction to get the characters in either direction
+                Set rngnumber = rng.Duplicate
+                rngnumber.MoveStart Unit:=wdCharacter, count:=-1
+                rngnumber.MoveEnd Unit:=wdCharacter, count:=1
+
+                If Not IsInURL(rng) Then
+                    If Len(rngnumber.text) > 3 Then
+                        If Not (rngnumber.Characters(1).text Like "[0-9]" And rngnumber.Characters(3).text Like "[0-9]") Then
+                            ' Add a comment for virgule
+                            rng.Comments.Add range:=rng, text:=commenttext
+                            commentcount = commentcount + 1
+                        End If
+                    Else
+                        ' Add a comment for virgule
+                        rng.Comments.Add range:=rng, text:=commenttext
+                        commentcount = commentcount + 1
+                    End If
+                End If
+            Loop
+        End With
+
+    ' Send the Error report text back to the main program
+    CheckVirgules = commentcount & " virgule issue(s) found."
+End Function
+Function IsInURL(rngd As range) As Boolean
+    ' Check if the current range is part of a URL
+    IsInURL = False
+    Dim replacerng As range
+    Set replacerng = rngd.Duplicate
+    
+    With replacerng
+        ' Move back to the beginning of the word (string) by checking for space, line break, or carriage return
+        Do While .Start > 1 And Not (.Characters.First.Previous.text = " " Or .Characters.First.Previous.text = vbCr Or .Characters.First.Previous.text = vbLf)
+            .MoveStart Unit:=wdCharacter, count:=-1
+
+        Loop
+
+        ' Check if the left 6 characters contain "https"
+        If InStr(1, Left(.text, 6), "http", vbTextCompare) > 0 Then
+            IsInURL = True
+        End If
+    End With
+End Function
+Function CheckPeriodNumber() As String
+    ' This code finds sentences that start with a numeric values and adds a comment for the user to correct
+
+    Dim regex As Object
+    Dim matches As Object
+    Dim match As Object
+    Dim range As range
+    Dim pattern As String
+    Dim pattern2 As String
+    Dim pattern3 As String
+    'Dim matchRange As range
+    Dim matchcount As Integer
+    Dim doc As Document
+    Dim rngfail As range
+   
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    Set rngfail = doc.range(0, 0)
+    
+    ' Define the pattern of period followed by 1 or 2 spaces and a numeric value \d. Or tab or carriage return and numeric value
+    pattern = "\.\ {1,2}\d"
+    'pattern2 = "\t\d+\s+" these tend to catch things that don't count
+    'pattern3 = "\r\d+\s+" these tend to catch things that don't count
+    
+    ' Set up the regular expression object
+    Set regex = CreateObject("VBScript.RegExp")
+    With regex
+        .Global = True
+        .MultiLine = True
+        .IgnoreCase = True
+        .pattern = pattern
+    End With
+    
+    ' Set the range to the entire document
+    Set range = ActiveDocument.range
+    
+    ' Find all matches in the document
+    Set matches = regex.Execute(ActiveDocument.range.text)
+    
+    'Initialize matchcount
+    matchcount = 0
+    
+    ' Loop through each match found
+    For Each match In matches
+        
+        ' Add a comment for each match found
+        With range.Find
+            .text = match
+            .MatchCase = True ' Make the search case-sensitive
+            .MatchWholeWord = False ' Search for whole words only
+            ' Comments every instance
+            If .Execute Then
+                ' Add a comment to each found instance of the acronym
+                range.Comments.Add range, "Found '" & match & "' at the begining of a sentence. Do not begin sentences with a numeric value. Per OPNAV Manual Ch 9: A figure must be spelled out at the beginning of a sentence. Please correct if applicable."
+            Else
+                ' Add a comment indicating that the acronym was not found. Word is weird the acronym was found using regex but is missed later?
+                doc.Comments.Add range:=rngfail, text:="Please search for '" & match & "' in the doc and correct based on OPNAV Manual guidance."
+            End If
+        End With
+                
+        ' Increase count by 1
+        matchcount = matchcount + 1
+    
+    Next match
+    
+'    ' Reset regex for second pattern
+'    regex.pattern = pattern2
+'
+'    ' Find all matches in the document
+'    Set matches = regex.Execute(ActiveDocument.range.text)
+'
+'        ' Loop through each match found
+'    For Each match In matches
+'
+'        ' Add a comment for each match found
+'        With range.Find
+'            .text = match
+'            .MatchCase = True ' Make the search case-sensitive
+'            .MatchWholeWord = False ' Search for whole words only
+'            'Comments every instance
+'            If .Execute Then
+'                ' Add a comment to each found instance of the acronym
+'                range.Comments.Add range, "Found '" & match & "' at the begining of a sentence. Do not begin sentences with a numeric value. Per OPNAV Manual Ch 9: A figure must be spelled out at the beginning of a sentence. Please correct if applicable."
+'            Else
+'                'If Not IsInURL(rng) Then  'Check if acronym is in url
+'                ' Add a comment indicating that the acronym was not found. Word is weird the acronym was found using regex but is missed later?
+'                doc.Comments.Add range:=rngfail, text:="Please search for '" & match & "' in the doc and correct based on OPNAV Manual guidance."
+'                'End If
+'            End If
+'        End With
+'        'Increase count by 1
+'        matchcount = matchcount + 1
+'
+'    Next match
+'
+'    ' Reset regex for second pattern
+'    regex.pattern = pattern3
+'
+'    ' Find all matches in the document
+'    Set matches = regex.Execute(ActiveDocument.range.text)
+'
+'        ' Loop through each match found
+'    For Each match In matches
+'
+'        ' Add a comment for each match found
+'        With range.Find
+'            .text = match
+'            .MatchCase = True ' Make the search case-sensitive
+'            .MatchWholeWord = False ' Search for whole words only
+'            'Comments every instance
+'            If .Execute Then
+'                ' Add a comment to each found instance of the acronym
+'                range.Comments.Add range, "Found '" & match & "' at the begining of a sentence. Do not begin sentences with a numeric value. Per OPNAV Manual Ch 9: A figure must be spelled out at the beginning of a sentence. Please correct if applicable."
+'            Else
+'                'If Not IsInURL(rng) Then  'Check if acronym is in url
+'                ' Add a comment indicating that the acronym was not found. Word is weird the acronym was found using regex but is missed later?
+'                doc.Comments.Add range:=rngfail, text:="Please search for '" & match & "' in the doc and correct based on OPNAV Manual guidance."
+'                'End If
+'            End If
+'        End With
+'        'Increase count by 1
+'        matchcount = matchcount + 1
+'
+'    Next match
+    
+    'Send the Error report text back to the main program
+    CheckPeriodNumber = matchcount & " instance(s) of a numeric value beginning a sentence."
+End Function
+Function CheckPhoneNumbersWithComments() As String
+    ' This code finds incorrect phone formats and adds a comment for the user to correct
+    Dim regex As Object
+    Dim matches As Object
+    Dim match As Object
+    Dim range As range
+    Dim pattern As String
+    Dim phonecount As Integer
+    Dim doc As Document
+    
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    ' Define the new pattern for phone numbers without optional parenthesis
+    pattern = "\b(?:\+?1[-. ]?)?\d{3}[-. ]?\d{3}[-. ]?\d{4}\b"
+    
+    ' Set up the regular expression object
+    Set regex = CreateObject("VBScript.RegExp")
+    With regex
+        .Global = True
+        .MultiLine = True
+        .IgnoreCase = True
+        .pattern = pattern
+    End With
+    
+    ' Set the range to the entire document
+    Set range = doc.range
+    
+    ' Find all matches in the document
+    Set matches = regex.Execute(range)
+    
+    ' Initialize phonecount
+    phonecount = 0
+    
+    ' Loop through each match found
+    For Each match In matches
+        ' Add a comment for each match found
+        range.Start = match.firstIndex
+        range.End = match.firstIndex
+        range.Comments.Add range, "Incorrect phone format found: " & match.Value & ". Per OPNAV Manual Ch 9: When using a phone number in a directive, it must follow the format (xxx) xxx-xxxx such as (123) 456-7890."
+    
+        'Increase count by 1
+        phonecount = phonecount + 1
+    Next match
+       
+    'Send the Error report text back to the main program
+    CheckPhoneNumbersWithComments = phonecount & " instance(s) of incorrect phone format."
+End Function
+Function CheckDateFormats() As String
+    ' This code finds incorrect date formats and adds a comment for the user to correct
+    Dim regex As Object
+    Dim matches As Object
+    Dim match As Object
+    Dim range As range
+    Dim pattern As String
+    Dim datecount As String
+    Dim doc As Document
+    
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+
+    ' Initialize phonecount
+    datecount = 0
+    
+    ' Define the pattern for the date formats "Mmm DD YYYY" and "Mmmm DD YY"
+    pattern = "\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?) \d{1,2},? \d{2,4}\b"
+    
+    ' Set up the regular expression object
+    Set regex = CreateObject("VBScript.RegExp")
+    With regex
+        .Global = True
+        .MultiLine = True
+        .IgnoreCase = True
+        .pattern = pattern
+    End With
+    
+    ' Set the range to the entire document
+    Set range = doc.range
+    
+    ' Find all matches in the document
+    Set matches = regex.Execute(range)
+    
+    ' Loop through each match found
+    For Each match In matches
+
+        ' Add a comment for each match found
+        range.Start = match.firstIndex
+        range.End = match.firstIndex
+        range.Comments.Add range, "Incorrect date format found: " & match.Value & " Per OPNAV Manual Ch 9: The required date format is “DD Mmm YYYY,” such as 2 Sep 2016. For single days (1 through 9), do not precede them with a zero (0). Within the text of a directive, the month must be spelled out (DD Month YYYY); for example, “2 September 2016.” "
+        
+        'Increase count by 1
+        datecount = datecount + 1
+    Next match
+    
+    ' check for 0 starting and 2 or 4 year
+    pattern = "\b0[1-9] (?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?) \d{2,4}\b"
+    
+    ' Set up the regular expression object
+    Set regex = CreateObject("VBScript.RegExp")
+    With regex
+        .Global = True
+        .MultiLine = True
+        .IgnoreCase = True
+        .pattern = pattern
+    End With
+    
+    ' Set the range to the entire document
+    Set range = doc.range
+    
+    ' Find all matches in the document
+    Set matches = regex.Execute(range)
+    
+    ' Loop through each match found
+    For Each match In matches
+        
+        ' Add a comment for each match found
+        range.Start = match.firstIndex
+        range.End = match.firstIndex
+        range.Comments.Add range, "Incorrect date format found: " & match.Value & " Per OPNAV Manual Ch 9: The required date format is “DD Mmm YYYY,” such as 2 Sep 2016. For single days (1 through 9), do not precede them with a zero (0). Within the text of a directive, the month must be spelled out (DD Month YYYY); for example, “2 September 2016.” "
+            
+        ' Increase count by 1
+        datecount = datecount + 1
+    
+    Next match
+    
+    ' Send the Error report text back to the main program
+    CheckDateFormats = datecount & " instance(s) of incorrect date format."
+End Function
+Function RequiredParagraphs() As String
+    ' This program checks for the presence of required paragraphs.
+    ' Checks that Purpose is on the first page. Technically the rule is that Purpose have 2 lines on the first page but this is better than nothing.
+    ' Checks that there is 1 blank line between Releasability and distribution and the signature block
+    ' Checks that there are 3 blank lines between the end of the text and the signature block
+    ' Checks for both a “Responsibilities” and an “Action” paragraph. This still needs work
+
+    Dim doc As Document
+    Dim rng As range
+    Dim paraName As Variant
+    Dim found As Boolean
+    Dim found1 As Boolean
+    Dim found2 As Boolean
+    Dim requirecount As Integer
+    Dim para As Variant
+    Dim vcount As Integer
+    
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    'Initialize phonecount
+    requirecount = 0
+    
+    ' List of paragraph names to search for
+    'paraName = Array("Purpose", "Cancellation", "Scope and Applicability", "Policy", "Records Management", "Review and Effective Date", "Forms or Information Management Control")
+    paraName = Array("Purpose", "Scope and Applicability", "Records Management", "Review and Effective Date")
+
+    For Each para In paraName
+        ' Set up the initial range
+        Set rng = doc.Content
+        
+        ' Find the location of the underlined text
+        With rng.Find
+            .text = para
+            .Format = True ' Consider formatting, such as underlining
+            .Font.Underline = True ' Set the underline property
+        End With
+        
+        found = rng.Find.Execute
+        
+        If Not found Then
+        
+            Set rng = doc.range(0, 0)
+            
+            Select Case para
+                Case "Cancellation", "Policy", "Forms or Information Management Control"
+                    ' Add a comment if paragraph is not found
+                    rng.Comments.Add rng, "Per OPNAV Manual Ch 9: Paragraph '" & para & "' is a required paragraph, if applicable. Either it was not found, not underlined, or spelled incorrectly. Please correct if applicable."
+                    requirecount = requirecount + 1
+                Case Else
+                    ' Add a comment if paragraph is not found
+                    rng.Comments.Add rng, "Per OPNAV Manual Ch 9: Paragraph '" & para & "' is a required paragraph. Either it was not found, not underlined, or spelled incorrectly. Please correct if applicable."
+                    requirecount = requirecount + 1
+                End Select
+        End If
+        
+        ' Check that Purpose is on the first page
+        If para = "Purpose" And found Then
+            If rng.Information(wdActiveEndAdjustedPageNumber) <> 1 Then
+                ' Add a comment if paragraph is not found
+                rng.Comments.Add rng, "Per OPNAV Manual Ch 9: '" & para & "' must have at least 2 lines on the letterhead page. It is currently on page " & rng.Information(wdActiveEndAdjustedPageNumber) & ". Please correct if applicable."
+                requirecount = requirecount + 1
+            End If
+        End If
+    Next para
+    
+    'Search for Releasability and distribution
+    
+        ' Set up the initial range
+        Set rng = doc.Content
+        
+        ' Find the location of the underlined text
+        With rng.Find
+            .text = "Releasability and distribution"
+            .Format = True ' Consider formatting, such as underlining
+        End With
+        
+        found = rng.Find.Execute
+        
+        If Not found Then
+            Set rng = doc.range(0, 0)
+            ' Add a comment if paragraph is not found
+            rng.Comments.Add rng, "Per OPNAV Manual Ch 2: Paragraph 'Releasability and distribution' is a required paragraph. Either it was not found, or spelled incorrectly. Please correct if applicable."
+            requirecount = requirecount + 1
+        Else
+            If rng.Characters.First.Previous.text <> vbCr Or rng.Characters.First.Previous.Previous.text <> vbCr Then
+                ' Add a comment
+                rng.Comments.Add rng, "Per OPNAV Manual Ch 2: 1 blank line (2 returns) is required from the signature block to the releasability and distribution block. Please correct if applicable."
+                requirecount = requirecount + 1
+            End If
+            
+            If (rng.Characters.First.Previous.text = vbCr And rng.Characters.First.Previous.Previous.text = vbCr And rng.Characters.First.Previous.Previous.Previous.text = vbCr) Then
+                ' Add a comment
+                rng.Comments.Add rng, "Too many blank lines were found. Per OPNAV Manual Ch 2: Only 1 blank line (2 returns) is required from the signature block to the releasability and distribution block. Please correct if applicable."
+                requirecount = requirecount + 1
+            End If
+            
+            ' Check that there are 3 lines between the end of the text and the signature block
+            Set releasep = rng.Paragraphs(1)
+            
+            ' If blank line before release then do this section otherwise skip
+            If rng.Characters.First.Previous.text = vbCr And rng.Characters.First.Previous.Previous.text = vbCr Then
+                Do While releasep.range.text <> vbCr
+                    Set releasep = releasep.Previous
+                Loop
+                Do While releasep.range.text = vbCr
+                    Set releasep = releasep.Previous
+                Loop
+            End If
+            
+            ' continue up the signature block
+            ' if there are no blank lines before signature block then it will go up the last paragraph
+            ' and then there is only 1 blank line between paragraphs which will still trigger a comment and
+            ' should alert the reviewer that something is up
+            Do While releasep.range.text <> vbCr
+                Set releasep = releasep.Previous
+            Loop
+            
+            'Count blank lines
+            vcount = 0
+            Do While releasep.range.text = vbCr
+                Set releasep = releasep.Previous
+                vcount = vcount + 1
+            Loop
+            
+            ' 3 blank lines required
+            If vcount <> 3 Then
+            ' Add a comment
+                releasep.range.Comments.Add releasep.range, vcount & " blank lines found before signature block. Per OPNAV Manual Ch 2: 3 blank lines (4 returns) are required from the body of the text to the signature block. Please correct if applicable."
+                requirecount = requirecount + 1
+            End If
+        End If
+        
+        'Still needs work because if Roles and Responsibilities is underlined it counts that as finding Responsibilities by itself.
+        'Search for Responsibility, search for Action
+        'Not necessary and not common to have both a “Responsibilities” and an “Action” paragraph
+    
+        ' Set up the initial range
+        Set rng = doc.Content
+        
+        ' Find the location of the underlined text
+        With rng.Find
+            .text = "Responsibilities"
+            .Format = True ' Consider formatting, such as underlining
+            .Font.Underline = True ' Set the underline property
+            .MatchWholeWord = True ' Match only Responsibilities as itself
+        End With
+        
+        'MsgBox rng.Find.text
+        
+        found1 = rng.Find.Execute
+        
+                ' Set up the initial range
+        Set rng = doc.Content
+        
+        ' Find the location of the underlined text
+        With rng.Find
+            .text = "Action"
+            .Format = True ' Consider formatting, such as underlining
+            .Font.Underline = True ' Set the underline property
+            .MatchWholeWord = True ' Match only Action as itself
+        End With
+        
+        found2 = rng.Find.Execute
+        
+        If found1 And found2 Then
+            ' Add a comment if paragraph is not found
+            rng.Comments.Add rng, "Per OPNAV Manual Ch 2: It is not necessary and not common to have both a 'Responsibilities' and an 'Action' paragraph. Please correct if applicable."
+            requirecount = requirecount + 1
+        End If
+        
+    ' Send the Error report text back to the main program
+    RequiredParagraphs = requirecount & " mising paragraph(s)."
+End Function
+Function CheckIndentationPatternAndLevel() As Integer
+    ' If the paragraph is indented incorrectly and in addition the type of pattern is totally different it will produce more comments.
+    ' It will catch things like if (d)is indented incorrectly and fix the indent and also recomend (d) be changed to the next logical (a-z) if (d) is out of order.
+    ' If (d) is indented incorrectly and not the same type of pattern of the previous indent say (1) then it will produce more comments
+    ' If there are spaces used after the pattern for example (a)space space Blah blah, it will flag those and comment the text
+    ' Last paragraph check for Solo doesn't work if there is a carriage return as the last paragraph
+    ' Checks for lower case letters after pattern
+    ' Checks for correct tabstop width before and after the pattern
+    
+    ' This does not check past the indent level of pattern (a-z) as I can't code a pattern for underline. But realistically you shouldn't go past that anyway as it gets too complicated to follow.
+    
+    Dim doc As Document
+    Dim para As paragraph
+    Dim level As Integer
+    Dim expectedIndent As Single
+    Dim expectedPattern As String
+    Dim actualPattern As String
+    Dim startChecking As Boolean
+    Dim indentlength As Integer
+    Dim count As Integer
+    Dim countlevel2 As Integer
+    Dim countlevel3 As Integer
+    Dim countlevel4 As Integer
+    Dim countlevel5 As Integer
+    Dim countlevel6 As Integer
+    Dim countlevel7 As Integer
+    Dim countlevel8 As Integer
+    Dim indentcount As Integer
+    Dim titlecount As Integer
+    Dim titlecount1 As Integer
+    Dim titlecount2 As Integer
+    Dim titlecount3 As Integer
+    Dim titlecount4 As Integer
+    Dim titlecount5 As Integer
+    Dim titlecount6 As Integer
+    Dim titlecount7 As Integer
+    Dim titlecount8 As Integer
+    Dim tabspace As Boolean
+    Dim tabindicator As Boolean
+    Dim tabposition As Single
+    Dim tabafterexpected As Single
+    Dim tabafter As Single
+    Dim expectedstop As Single
+    Dim i As Integer
+    Dim newindent As Integer
+    Dim hasNonWhitespace As Boolean
+    Dim foundNonWhitespace As Boolean
+    Dim j As Integer
+    Dim patternstart As String
+    Dim spaces As Integer
+    Dim tabs As Integer
+    Dim previousline As Integer
+
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+   
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+           'Dim Responsetab As VbMsgBoxResult
+        ' Ask the user if they want to run the tabstops
+        'Responsetab = MsgBox("Do you want to update all the Tabstops? Not recommened unless the doc is really fubar.", vbQuestion + vbYesNo, "Acronym Check")
+            'If Responsetab = vbYes Then
+                    'Call to function that adds Tab Stops to the document. see below for code
+                    'AddTabStops
+            'End If
+
+        'Call to function that adds Tab Stops to the document. see below for code
+    
+    ' Initialize Indent count
+    indentcount = 0
+    ' Initialize previousline count
+    previousline = 0
+    
+    ' Loop through each paragraph in the document
+    For Each para In doc.Paragraphs
+        
+        ' set nonwhitespace to false
+        hasNonWhitespace = False
+        
+        
+        ' Iterate through each character in the paragraph text to see if it has a non white space
+        For i = 1 To Len(para.range.text)
+            If Not (Mid(para.range.text, i, 1) = " " Or Mid(para.range.text, i, 1) = vbTab Or Mid(para.range.text, i, 1) = vbCr) Then
+                ' If a non-whitespace character is found, set the flag to true and exit the loop
+                hasNonWhitespace = True
+                Exit For
+            End If
+            ' Set previous line to 1 if there is correct spacing between paragraphs
+            If i = Len(para.range.text) Then
+                If previousline = 0 Then
+                previousline = 1
+                Else
+                previousline = previousline + 1
+                End If
+            End If
+        Next i
+        
+            
+        If hasNonWhitespace Then
+        ' Find the Actual pattern
+        ' Initialize loop counter j to 0
+        j = 0
+         ' Loop through each character in the paragraph
+         For i = 1 To Len(para.range.text)
+             ' Check if the character is not a whitespace character or a tab
+             If Not (Mid(para.range.text, i, 1) = " " Or Mid(para.range.text, i, 1) = vbTab) Then
+                 ' Increment non-whitespace character count
+                 j = j + 1
+             Else
+                 ' If a whitespace character is found and there are already non-whitespace characters in the result, exit the loop
+                 If j > 0 Then
+                     Exit For
+                 End If
+             End If
+         Next i
+        
+        ' Extract the substring containing non-whitespace characters and assign it to result
+        actualPattern = Mid(para.range.text, i - j, j)
+
+        ' Check if the paragraph starts with "1."
+        If actualPattern = "1." Then
+            ' Initialize variables for the expected indentation and pattern
+            startChecking = True ' Set flag to start checking from this paragraph
+            level = 1
+            count = 1
+            countlevel2 = 0
+            countlevel3 = 0
+            countlevel4 = 0
+            countlevel5 = 0
+            countlevel6 = 0
+            countlevel7 = 0
+            countlevel8 = 0
+            'Set counts to zero if paragraph restarts at 1.
+            titlecount1 = 0
+            titlecount2 = 0
+            titlecount3 = 0
+            titlecount4 = 0
+            titlecount5 = 0
+            titlecount6 = 0
+            titlecount7 = 0
+            titlecount8 = 0
+        End If
+        
+        If startChecking Then
+
+           
+        ' Skip things that are not like the list pattern
+        ' check to see if pattern is one of the recognized ones
+        If actualPattern Like "[1-9]." Or actualPattern Like "[1-9][0-9]." Or actualPattern Like "([1-9])" Or actualPattern Like "([1-9][0-9])" Or actualPattern Like "[a-z]." Or actualPattern Like "[a-z][a-z]." Or actualPattern Like "([a-z])" Or actualPattern Like "([a-z][a-z])" Then
+            
+        ' Add a comment if the paragraphs do not have a blank line between them
+        If previousline = 0 Then
+            
+            para.range.Comments.Add para.range, "No spacing between the above paragraphs. Per OPNAV Manual Ch 9: a blank line is required between each paragraph and subparagraph. Please verify and add a blank line between paragraphs if applicable."
+                
+            ' increase comment counter by 1
+            indentcount = indentcount + 1
+        End If
+        ' Add a comment if there are too many blank lines between paragraphs
+        If previousline > 1 Then
+                    
+            para.range.Comments.Add para.range, previousline & " blank lines were found above this paragraph. Per OPNAV Manual Ch 9: a single blank line is required between each paragraph and subparagraph. Please verify and ensure a single blank line is between paragraphs if applicable."
+                
+            ' increase comment counter by 1
+            indentcount = indentcount + 1
+        End If
+            
+            ' Call function to calculate indentation based on the number of spaces or tabs. Also get tabposition e.g. .25 , .5 etc
+            CountIndentation para.range, indentlength, tabspace, tabindicator, tabposition
+            
+            ' If spaces or spaces and tabs are found put out a comment and delete both tabs and spaces. The program will update the tabs later
+            If tabspace Then
+            
+                para.range.Comments.Add para.range, "Spaces found in indent. Recommend only tabs. Spaces were deleted"
+                
+                ' increase comment counter by 1
+                indentcount = indentcount + 1
+                
+            ' Deleting everything to zero tab
+                For i = 1 To indentlength
+                    If para.range.Characters(1) = vbTab Or para.range.Characters(1) = " " Then
+                    para.range.Characters(1).Delete
+                    Else
+                    Exit For
+                    End If
+                Next i
+                indentlength = 0
+            End If
+
+                If actualPattern Like "[1-9]." Or actualPattern Like "[1-9][0-9]." Then
+                
+                    expectedIndent = 0
+                    level = 1
+                    
+                    expectedstop = 0
+                    tabafterexpected = 0.25
+                    
+                    If count = 0 Then
+                    count = count + 1
+                    End If
+                    
+                    If actualPattern Like "[1-9][0-9]." Then
+                        tabafterexpected = 0.3125
+                        'add comment
+                        para.range.Comments.Add para.range, "Please make sure the tab stop for the start of double digit paragraphs '##.' are set to 0.31 inches and subparagraphs are adjusted as well. Per OPNAV Manual Ch 9: For paragraphs and subparagraphs with double digits (such as “10,” “11”, etc.), adjust tab stop accordingly."
+                    End If
+
+                ElseIf actualPattern Like "[a-z]." Or actualPattern Like "[a-z][a-z]." Then
+                
+                    expectedIndent = 1
+                    level = 2
+                    
+                    expectedstop = 0.25
+                    tabafterexpected = 0.5
+
+                    If countlevel2 = 0 Then
+                    countlevel2 = countlevel2 + 1
+                    End If
+                    'unlikely to get to aa becuase that would be 27 indents!
+
+                ElseIf actualPattern Like "([1-9])" Or actualPattern Like "([1-9][0-9])" Then
+                
+                    expectedIndent = 2
+                    level = 3
+                    
+                    expectedstop = 0.5
+                    tabafterexpected = 0.75
+                    
+
+                    If countlevel3 = 0 Then
+                        countlevel3 = countlevel3 + 1
+                    End If
+    
+                    If actualPattern Like "([1-9][0-9])" Then
+                    
+                        tabafterexpected = 0.8125
+                
+                        'add comment
+                        para.range.Comments.Add para.range, "Please make sure the tab stop for the start of double digit paragraphs '(##)' are set to 0.81 inches and subparagraphs are adjusted as well. Per OPNAV Manual Ch 9: For paragraphs and subparagraphs with double digits (such as “10,” “11”, etc.), adjust tab stop accordingly."
+                    End If
+                    
+                ElseIf actualPattern Like "([a-z])" Or actualPattern Like "([a-z][a-z])" Then
+             
+                    expectedIndent = 3
+                    level = 4
+                    
+                    expectedstop = 0.75
+                    tabafterexpected = 1
+
+                    If countlevel4 = 0 Then
+                        countlevel4 = countlevel4 + 1
+                    End If
+
+                Else
+                para.range.Comments.Add para.range, "Odd list pattern found. Please verify with OPNAV Manual"
+                End If
+                
+                                
+            
+            If expectedIndent <> indentlength Then
+            
+               
+                'calculate the correct indent length
+                newindent = expectedIndent - indentlength
+
+                'Move the paragraph according to newindent
+                If newindent > 0 Then
+                             ' Insert tab characters for positive indentation
+                             For i = 1 To newindent
+                                 ' Insert tab character
+                                 If tabindicator Then
+                                 para.range.InsertBefore vbTab
+                                 Else
+                                 para.range.InsertBefore " "
+                                 End If
+                             Next i
+                ElseIf newindent < 0 Then
+                                         ' Delete tabs from the beginning of the paragraph for negative indentation
+                        For i = 1 To Abs(newindent)
+                            If para.range.Characters(1) = vbTab Or para.range.Characters(1) = " " Then
+                                para.range.Characters(1).Delete
+                            Else
+                                Exit For ' Exit the loop if there are no more tabs to delete
+                            End If
+                        Next i
+                End If
+                
+                ' need to see if tabposition updated with the change. Recalculate tabposition
+                CountIndentation para.range, indentlength, tabspace, tabindicator, tabposition
+                
+                ' reset indentlength to expectedIndent
+                indentlength = expectedIndent
+                
+                ' add comment
+                para.range.Comments.Add para.range, "Wrong indent found. Corrected to " & expectedIndent & " tab(s) based on the pattern: " & actualPattern
+                
+                ' increase comment counter by 1
+                indentcount = indentcount + 1
+                
+            End If ' Expected indent
+            
+            ' Check for correct tab width prior to pattern.Need to round tabposition because it is like 0.253308 etc.
+            If expectedstop <> Round(tabposition, 2) Then
+                ' add comment
+                para.range.Comments.Add para.range, "Wrong tabstop found before '" & actualPattern & "'. The tabstop is " & tabposition & " but should be at " & expectedstop & " based on the pattern: " & actualPattern & ". Please correct if applicable."
+                
+                'increase comment counter by 1
+                indentcount = indentcount + 1
+             End If
+             
+            If expectedIndent = indentlength Then
+            
+                ' recalculate expected pattern
+                
+                 If indentlength = 0 Then
+                        level = 1
+                        'this area needs work
+                    ElseIf indentlength = 1 Then
+                        level = 2
+                        
+                        If countlevel2 = 0 Then
+                        countlevel2 = 1
+                        End If
+                    ElseIf indentlength = 2 Then
+                        level = 3
+    
+                        If countlevel3 = 0 Then
+                        countlevel3 = 1
+                        End If
+                    ElseIf indentlength = 3 Then
+                        level = 4
+    
+    
+                        If countlevel4 = 0 Then
+                        countlevel4 = 1
+                        End If
+                    ElseIf indentlength = 4 Then
+                        level = 5
+    
+    
+                        If countlevel5 = 0 Then
+                        countlevel5 = 1
+                        End If
+                    ElseIf indentlength = 5 Then
+                        level = 6
+    
+    
+                        If countlevel6 = 0 Then
+                        countlevel6 = 1
+                        End If
+                    ElseIf indentlength = 6 Then
+                        level = 7
+    
+                        If countlevel7 = 0 Then
+                        countlevel7 = 1
+                        End If
+                    ElseIf indentlength = 7 Then
+                        level = 8
+                        countlevel8 = 1
+                    Else
+                        'do I need this?
+                        para.range.Comments.Add para.range, "Too many indent levels"
+                    End If
+
+            If level = 1 Then
+                expectedPattern = count & "." ' First level pattern 1.
+            ElseIf level = 2 Then
+                expectedPattern = Chr(97 + (countlevel2 - 1)) & "." ' Second level pattern a.
+            ElseIf level = 3 Then
+                patternstart = countlevel3 ' 3rd level pattern (1)
+                expectedPattern = "(" & patternstart & ")" ' Start with letter enclosed in parentheses
+            ElseIf level = 4 Then
+                patternstart = Chr(97 + (countlevel4 - 1))  ' 4th level patter (a)
+                expectedPattern = "(" & patternstart & ")" ' Start with number enclosed in parentheses
+            End If
+                
+                
+                If expectedPattern <> actualPattern Then
+                ' increase comment counter by 1
+                indentcount = indentcount + 1
+                para.range.Comments.Add para.range, "Wrong pattern found. Pattern '" & actualPattern & "' should be '" & expectedPattern & "' based on current indent."
+                End If
+            End If ' expectedPattern <> actualPattern
+            
+            ' Check if there are spaces or tabs after the pattern. Tabs recommended
+            foundNonWhitespace = False
+            spaces = 0
+            tabs = 0
+            titlecount = 0
+            
+            For i = 1 To Len(para.range.text)
+                If Not (Mid(para.range.text, i, 1) = " " Or Mid(para.range.text, i, 1) = vbTab) Then
+                    ' Check for the first non-whitespace character
+                    If foundNonWhitespace Then
+
+                        ' Output the whitespace characters after the first non-whitespace character
+                        If spaces + tabs > 0 Then
+                            
+                            'Check if the Sentence starts with a lowercase letter
+                            If Mid(para.range.text, i, 1) Like "[a-z]" Then
+                            'Comment the spaces
+                            para.range.Comments.Add para.range, "Lower case letter '" & Mid(para.range.text, i, 1) & "' found directly after '" & actualPattern & "'. Recommend using capital '" & UCase(Mid(para.range.text, i, 1)) & "'."
+                            
+                            'increase comment counter by 1
+                            indentcount = indentcount + 1
+                            
+                            End If
+                                    
+                            'Check if the first letter is underlined indicating a title. Per OPNAV Manual be consistent with use of titles within each paragraph and subparagraph
+                            If para.range.Characters(i).Font.Underline = 1 Then
+                            titlecount = 1
+                            End If
+
+                        
+                            If spaces > 0 Then
+                            'Comment the spaces
+                            para.range.Comments.Add para.range, spaces & " space(s) found in indent after '" & actualPattern & "'. Recommend using a single tab instead."
+                            
+                            'increase comment counter by 1
+                            indentcount = indentcount + 1
+                            End If
+                            
+                            'need to add code to check that the tabs after are good. tell the person what the tab needs to be or code that.
+                            'Spaces come from another area in the code
+                            tabafter = para.range.Characters(i).Information(wdHorizontalPositionRelativeToTextBoundary) / 72
+                   
+                            Exit For
+                        End If
+                    Else
+                        foundNonWhitespace = True
+                    End If
+                ElseIf foundNonWhitespace Then
+                    ' Count whitespace characters after the first non-whitespace character
+                    If Mid(para.range.text, i, 1) = " " Then
+                        spaces = spaces + 1
+                    Else 'Mid(para.range.text, i, 1) = vbTab
+                        tabs = tabs + 1
+                    End If
+                End If
+            Next i
+            
+            'Check tabstop after pattern. Need to round tabafter because it is like 0.253308 etc.
+            If Round(tabafter, 2) <> tabafterexpected Then
+                'add comment
+                para.range.Comments.Add para.range, "Wrong tabstop found after '" & actualPattern & "'. The tabstop is " & tabafter & " but should be at " & tabafterexpected & " based on the pattern: '" & actualPattern & "'. Please correct if applicable."
+                
+                'increase comment counter by 1
+                indentcount = indentcount + 1
+            End If
+            
+            
+            
+           'Update the level counts
+            If level = 1 Then
+            
+                titlecount1 = titlecount1 + titlecount
+                    'Title consistency check
+                    If titlecount1 > 0 And titlecount1 <> count Then
+                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        indentcount = indentcount + 1
+                        'helps reduce additional comments when issue is found
+                        titlecount1 = count
+                    End If
+                    
+                count = count + 1
+
+                    'Solo A check
+                    If countlevel2 = 2 Or countlevel3 = 2 Or countlevel4 = 2 Or countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
+                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        indentcount = indentcount + 1
+                    End If
+                    
+                'Zero out the lower level counts
+                countlevel2 = 0
+                countlevel3 = 0
+                countlevel4 = 0
+                countlevel5 = 0
+                countlevel6 = 0
+                countlevel7 = 0
+                countlevel8 = 0
+                
+                'Zero out the lower level title counts
+                titlecount2 = 0
+                titlecount3 = 0
+                titlecount4 = 0
+                titlecount5 = 0
+                titlecount6 = 0
+                titlecount7 = 0
+                titlecount8 = 0
+                
+                    
+            ElseIf level = 2 Then
+            
+                titlecount2 = titlecount2 + titlecount
+                    'Title consistency check
+                    If titlecount2 > 0 And titlecount2 <> countlevel2 Then
+                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        indentcount = indentcount + 1
+                        'helps reduce additional comments when issue is found
+                        titlecount2 = countlevel2
+                    End If
+                    
+                countlevel2 = countlevel2 + 1
+                
+                    'solo A check
+                    If countlevel3 = 2 Or countlevel4 = 2 Or countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
+                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        indentcount = indentcount + 1
+                    End If
+                    'MsgBox nextPattern
+                    
+                'Zero out the lower level counts
+                countlevel3 = 0
+                countlevel4 = 0
+                countlevel5 = 0
+                countlevel6 = 0
+                countlevel7 = 0
+                countlevel8 = 0
+                
+                'Zero out the lower level title counts
+                titlecount3 = 0
+                titlecount4 = 0
+                titlecount5 = 0
+                titlecount6 = 0
+                titlecount7 = 0
+                titlecount8 = 0
+
+            ElseIf level = 3 Then
+            
+                titlecount3 = titlecount3 + titlecount
+                    'Title consistency check
+                    If titlecount3 > 0 And titlecount3 <> countlevel3 Then
+                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        indentcount = indentcount + 1
+                        'helps reduce additional comments when issue is found
+                        titlecount3 = countlevel3
+                    End If
+            
+                countlevel3 = countlevel3 + 1
+                
+                    'solo A check
+                    If countlevel4 = 2 Or countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
+                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        indentcount = indentcount + 1
+                    End If
+
+                'Zero out the lower level counts
+                countlevel4 = 0
+                countlevel5 = 0
+                countlevel6 = 0
+                countlevel7 = 0
+                countlevel8 = 0
+                
+                'Zero out the lower level title counts
+                titlecount4 = 0
+                titlecount5 = 0
+                titlecount6 = 0
+                titlecount7 = 0
+                titlecount8 = 0
+                
+            ElseIf level = 4 Then
+            
+                titlecount4 = titlecount4 + titlecount
+                    'Title consistency check
+                    If titlecount4 > 0 And titlecount4 <> countlevel4 Then
+                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        indentcount = indentcount + 1
+                        'helps reduce additional comments when issue is found
+                        titlecount4 = countlevel4
+                    End If
+                    
+                countlevel4 = countlevel4 + 1
+                
+                    'solo A check
+                    If countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
+                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        indentcount = indentcount + 1
+                    End If
+                    
+                'Zero out the lower level counts
+                countlevel5 = 0
+                countlevel6 = 0
+                countlevel7 = 0
+                countlevel8 = 0
+                
+                'Zero out the lower level title counts
+                titlecount5 = 0
+                titlecount6 = 0
+                titlecount7 = 0
+                titlecount8 = 0
+
+            ElseIf level = 5 Then
+                
+                titlecount5 = titlecount5 + titlecount
+                    'Title consistency check
+                    If titlecount5 > 0 And titlecount5 <> countlevel5 Then
+                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        indentcount = indentcount + 1
+                        'helps reduce additional comments when issue is found
+                        titlecount5 = countlevel5
+                    End If
+            
+                para.range.Comments.Add para.range, "For readability and comprehension, consider not having this many indent levels. Please review OPNAV Manual Ch 2."
+                countlevel5 = countlevel5 + 1
+                
+                    'solo A check
+                    If countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
+                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        indentcount = indentcount + 1
+                    End If
+                    
+                'Zero out the lower level counts
+                countlevel6 = 0
+                countlevel7 = 0
+                countlevel8 = 0
+                
+                'Zero out the lower level title counts
+                titlecount6 = 0
+                titlecount7 = 0
+                titlecount8 = 0
+
+            ElseIf level = 6 Then
+            
+                titlecount6 = titlecount6 + titlecount
+                    'Title consistency check
+                    If titlecount6 > 0 And titlecount6 <> countlevel6 Then
+                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        indentcount = indentcount + 1
+                        'helps reduce additional comments when issue is found
+                        titlecount6 = countlevel6
+                    End If
+                    
+                para.range.Comments.Add para.range, "For readability and comprehension, consider not having this many indent levels. Please review OPNAV Manual Ch 2."
+                countlevel6 = countlevel6 + 1
+                
+                    'solo A check
+                    If countlevel7 = 2 Or countlevel8 = 2 Then
+                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        indentcount = indentcount + 1
+                    End If
+                    
+                'Zero out the lower level counts
+                countlevel7 = 0
+                countlevel8 = 0
+                
+                'Zero out the lower level title counts
+                titlecount7 = 0
+                titlecount8 = 0
+
+            ElseIf level = 7 Then
+            
+                titlecount7 = titlecount7 + titlecount
+                    'Title consistency check
+                    If titlecount7 > 0 And titlecount7 <> countlevel7 Then
+                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        indentcount = indentcount + 1
+                        'helps reduce additional comments when issue is found
+                        titlecount7 = countlevel7
+                    End If
+                    
+                para.range.Comments.Add para.range, "For readability and comprehension, consider not having this many indent levels. Please review OPNAV Manual Ch 2."
+                countlevel7 = countlevel7 + 1
+                
+                    'solo A check
+                    If countlevel8 = 2 Then
+                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        indentcount = indentcount + 1
+                    End If
+
+                'Zero out the lower level counts
+                countlevel8 = 0
+                
+                'Zero out the lower level title counts
+                titlecount8 = 0
+                
+            ElseIf level = 8 Then
+            
+                titlecount8 = titlecount8 + titlecount
+                    'Title consistency check
+                    If titlecount8 > 0 And titlecount8 <> countlevel8 Then
+                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        indentcount = indentcount + 1
+                        'helps reduce additional comments when issue is found
+                        titlecount8 = countlevel8
+                    End If
+                
+                para.range.Comments.Add para.range, "For readability and comprehension, consider not having this many indent levels. Please review OPNAV Manual Ch 2."
+                countlevel8 = countlevel8 + 1
+        
+            End If
+
+        End If  'pattern like (a-z) or ...
+        
+        'check for spaces or tabs after pattern
+        End If 'hasnowhitespace
+       
+            ' Check if there is a next paragraph
+            'Last paragraph check for Solo doesn't work if there is a carriage return as the last paragraph
+            If para.Next Is Nothing Then
+            
+                'solo A check. What if there is a solo paragraph at the end
+                If countlevel2 = 2 Or countlevel3 = 2 Or countlevel4 = 2 Or countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
+                    para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                    indentcount = indentcount + 1
+                End If
+                
+                Exit For ' Exit loop if there is no next paragraph
+            
+            End If
+        
+        'set previousline to zero if non whitespace is incountered
+        previousline = 0
+    End If 'Startchecking
+         
+    Next para
+    
+    ' Send the indent count to automatic numbering error message
+    CheckIndentationPatternAndLevel = indentcount
+   
+End Function
+Function CountIndentation(ByVal rng As range, ByRef indentlength As Integer, ByRef tabspace As Boolean, ByRef tabindicator As Boolean, ByRef tabposition As Single)
+    ' Count the number of spaces or tabs before the first non-whitespace character in the range
+    Dim charIndex As Integer
+    Dim tabCount As Integer
+    Dim spacecount As Integer
+    
+    tabCount = 0
+    spacecount = 0
+    indentlength = 0
+    tabspace = False
+    tabindicator = True
+  
+    ' Iterate through characters in the range
+    For charIndex = 1 To rng.Characters.count
+        ' Check if the character is a space or a tab
+        If rng.Characters(charIndex).text = " " Then
+            ' Increment the indentation length
+            indentlength = indentlength + 1
+            spacecount = spacecount + 1
+        ElseIf rng.Characters(charIndex).text = vbTab Then
+            ' Increment the indentation length
+            indentlength = indentlength + 1
+            tabCount = tabCount + 1
+        ElseIf rng.Characters(charIndex).text = vbCr Then
+            ' Ignore carriage return (end of paragraph)
+            Exit For
+        ElseIf Not rng.Characters(charIndex).text Like "[ ]" Then
+            ' Exit loop when a non-whitespace character is encountered
+            Exit For
+        End If
+    Next charIndex
+   
+   If spacecount > 0 Then
+        tabspace = True ' Set flag to true
+   ElseIf tabCount > 0 Or tabCount = 0 Then
+        tabindicator = True
+   Else
+        tabindicator = False
+   End If
+   
+    ' Not sure why but need to add 1 to get the right value
+    tabposition = rng.Characters(indentlength + 1).Information(wdHorizontalPositionRelativeToTextBoundary) / 72
+End Function
+Sub AddTabStops()
+   ' adds tab stops to the document
+    Dim para As paragraph
+
+    For Each para In ActiveDocument.Paragraphs
+        para.TabStops.ClearAll
+    para.TabStops.Add position:=InchesToPoints(0.25), _
+        Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    para.TabStops.Add position:=InchesToPoints(0.5), _
+        Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    para.TabStops.Add position:=InchesToPoints(0.75), _
+        Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    para.TabStops.Add position:=InchesToPoints(1), _
+        Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    para.TabStops.Add position:=InchesToPoints(1.25), _
+        Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    para.TabStops.Add position:=InchesToPoints(1.5), _
+        Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    para.TabStops.Add position:=InchesToPoints(3.25), _
+        Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    para.TabStops.Add position:=InchesToPoints(5), _
+        Alignment:=wdAlignTabLeft, Leader:=wdTabLeaderSpaces
+    Next para
+End Sub
+Function margins() As String
+    ' This program checks that the margins satisfy Opnav manual CH2.
+    Dim headerheight As Single
+    Dim footerheight As Single
+    Dim LeftMargin As Single
+    Dim RightMargin As Single
+    Dim doc As Document
+    Dim pageNum As Integer
+    Dim rngPage As range
+    Dim margincount As Integer
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    ' Initialize the counts
+    margincount = 0
+
+    ' loop through each page in the document
+    For pageNum = 1 To doc.ComputeStatistics(wdStatisticPages)
+    
+        ' set range to represent the current page
+        Set rngPage = doc.GoTo(What:=wdGoToPage, Which:=wdGoToAbsolute, count:=pageNum)
+        
+        ' get the header and footer margins of the current page
+        headerheight = rngPage.Sections(1).PageSetup.HeaderDistance / 72
+        footerheight = rngPage.Sections(1).PageSetup.FooterDistance / 72
+        
+        ' get the left and right margins
+        LeftMargin = rngPage.Sections(1).PageSetup.LeftMargin / 72
+        RightMargin = rngPage.Sections(1).PageSetup.RightMargin / 72
+        
+        If pageNum = 1 Then
+            ' Check if Header is .5 inch for first page
+            If headerheight <> 0.5 Then
+                rngPage.Collapse wdCollapseStart
+                rngPage.Comments.Add rngPage, "Incorrect header margin " & headerheight & " inch(es) found for first page. Per OPNAV Manual Ch 2: Please correct Header to 0.5 inches. You may have to add a 'Next Page' break, under Layout>Breaks, at the end of the first page in order to get different first page and subsequent page margins."
+                margincount = margincount + 1
+            End If
+            
+        Else
+            ' Check if Header is 1 inch for all other pages
+            If headerheight <> 1 Then
+                rngPage.Collapse wdCollapseStart
+                rngPage.Comments.Add rngPage, "Incorrect header margin " & headerheight & " inches found for page " & pageNum & ". Per OPNAV Manual Ch 2: Please correct header to 1 inch."
+                margincount = margincount + 1
+            End If
+        End If
+            
+        ' Check if footer is .5 inch
+        If footerheight <> 0.5 Then
+            rngPage.Collapse wdCollapseStart
+            rngPage.Comments.Add rngPage, "Incorrect footer margin " & footerheight & " inch(es) found for page " & pageNum & ". Per OPNAV Manual Ch 2: Please correct footer to 0.5 inches."
+            margincount = margincount + 1
+        End If
+    
+        ' Check Right and left margins
+        If LeftMargin <> 1 Then
+            rngPage.Collapse wdCollapseStart
+            rngPage.Comments.Add rngPage, "Incorrect left margin " & LeftMargin & " inches found for page " & pageNum & ". Per OPNAV Manual Ch 2: Please correct left margin to 1 inch."
+            margincount = margincount + 1
+        End If
+        
+        If RightMargin <> 1 Then
+            rngPage.Collapse wdCollapseStart
+            rngPage.Comments.Add rngPage, "Incorrect right margin " & RightMargin & " inches found for page " & pageNum & ". Per OPNAV Manual Ch 2: Please correct right margin to 1 inch."
+            margincount = margincount + 1
+        End If
+    Next pageNum
+    
+    ' Send the Error report text back to the main program
+    margins = margincount & " instance(s) of margin errors."
+End Function
+Function CheckParagraphSpan() As String
+    ' This Macro checks for paragraphs that span multipe pages
+    Dim doc As Document
+    Dim rng As range
+    Dim para As paragraph
+    Dim firstPage As Integer
+    Dim lastPage As Integer
+    Dim spancount As Integer
+
+    
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    'Initialize Count
+    spancount = 0
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+   
+    ' Loop through each paragraph in the document
+    For Each para In doc.Paragraphs
+        ' Set range to the paragraph
+        Set rng = para.range
+       
+        ' Get the page number of the first character
+        firstPage = rng.Characters.First.Information(wdActiveEndAdjustedPageNumber)
+       
+        ' Get the page number of the last character
+        lastPage = rng.Characters.Last.Information(wdActiveEndAdjustedPageNumber)
+       
+        ' Check if paragraph spans multiple pages
+        If firstPage <> lastPage Then
+            rng.Comments.Add range:=rng, text:="This paragraph spans multiple pages. Per OPNAV Manual Ch 9: Where absolutely possible, ensure the top of each page and the bottom of each page contain two full lines of text."
+            ' Increment count
+            spancount = spancount + 1
+        End If
+    Next para
+    
+    ' Send the Error report text back to the main program
+    CheckParagraphSpan = spancount & " instance(s) of paragraphs spanning multiple pages."
+End Function
+Function CheckParagraphSpacing() As String
+    ' This code checks for Paragraph formatting
+    Dim doc As Document
+    Dim para As paragraph
+    Dim issueCount As Integer
+    
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    ' Initialize the counts
+    issueCount = 0
+   
+    For Each para In doc.Paragraphs
+    
+        ' Check line spacing
+        If para.LineSpacingRule <> wdLineSpaceSingle Then
+            ' Convert to single
+            para.LineSpacingRule = wdLineSpaceSingle
+            ' Add comment indicating non-single spacing
+            para.range.Comments.Add para.range, "This paragraph was not single spaced. Per OPNAV Manual Ch 9: Paragraph line spacing is set to 'single'."
+            issueCount = issueCount + 1
+        End If
+        
+        ' Check paragraph spacing
+        If para.SpaceBefore <> 0 Then
+            ' Convert to zero
+            para.SpaceBefore = 0
+            ' Add comment indicating zero spacing
+            para.range.Comments.Add para.range, "This paragraph had 'before' spacing set to " & para.SpaceBefore & "pt.  Per OPNAV Manual Ch 9: Before spacing is corrected to '0'."
+            issueCount = issueCount + 1
+        End If
+        
+        ' Check paragraph spacing
+        If para.SpaceAfter <> 0 Then
+            ' Convert to zero
+            para.SpaceAfter = 0
+            ' Add comment indicating zero spacing
+            para.range.Comments.Add para.range, "This paragraph had 'after' spacing set to " & para.SpaceAfter & "pt.  Per OPNAV Manual Ch 9: After spacing is corrected '0'."
+            issueCount = issueCount + 1
+        End If
+        
+        ' Check Left alignment
+        ' Need to ignore when all caps for titles. But I don't see a specific rule for that.
+        If para.Alignment <> wdAlignParagraphLeft And UCase(para.range.text) <> para.range.text Then
+            ' Convert to Left Alignment. Turned off because attachments and enlcosures could be centered on purpose. Easier to correct then fix after the fact
+            'para.Alignment = wdAlignParagraphLeft
+            ' Add comment indicating wrong alignment
+            para.range.Comments.Add para.range, "This paragraph is not left-aligned. Per OPNAV Manual Ch 9: Paragraph alignment is set to 'left'."
+            issueCount = issueCount + 1
+        End If
+       
+        If para.OutlineLevel <> wdOutlineLevelBodyText Then
+            ' Convert to Body text
+            para.OutlineLevel = wdOutlineLevelBodyText
+            ' Add comment indicating wrong outline level
+            para.range.Comments.Add para.range, "This paragraph did not have outline level 'Body Text'. Per OPNAV Manual Ch 9: Paragraph outline level is set to 'Body text'."
+            issueCount = issueCount + 1
+        End If
+        
+        ' check for hanging indents
+        If para.LeftIndent <> 0 Or para.FirstLineIndent <> 0 Then
+            ' Turned off because attachments and enlcosures could have hanging indent on purpose. Easier to correct then fix after the fact
+            ' Change left indent to 0
+            'para.LeftIndent = 0
+            ' Change first line indent to 0
+            'para.FirstLineIndent = 0
+            ' Add comment indicating the change
+            para.range.Comments.Add para.range, "This paragraph has a hanging or first line indent. Per OPNAV Manual Ch 9: Left indent is set to 0 inches."
+            issueCount = issueCount + 1
+        End If
+    
+    Next para
+   
+    ' Send the Error report text back to the main program
+    CheckParagraphSpacing = issueCount & " instance(s) of incorrect paragraph formatting."
+End Function
+Function HeadersAndFootersByPage() As String
+    ' This program checks that Headers are not blank and that footers are not blank(except page 1)
+    ' That footers do not have a return before or after.
+    ' Checks that the footer is centered
+    ' Checks that the header text is aligned with longest line
+
+    ' Deselect any selected comment cards or we get an error
+    'DeselectComment
+    
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+    
+    Dim pageindex As Integer
+    Dim pageCount As Integer
+    pageCount = doc.ComputeStatistics(wdStatisticPages)
+
+    Dim headerText As String
+    Dim footerText As String
+    Dim rng As range
+    Dim headfootcount As Integer
+    
+    ' Initialize the counts
+    headfootcount = 0
+
+    For pageindex = 1 To pageCount
+        ' Set a range to the current page
+        Set rng = doc.GoTo(What:=wdGoToPage, Which:=wdGoToAbsolute, count:=pageindex)
+        rng.Collapse Direction:=wdCollapseStart
+
+        ' Get the header and footer text for the current page
+        headerText = GetHeaderTextForPage(rng, pageindex, headfootcount)
+        footerText = GetFooterTextForPage(rng, pageindex, headfootcount)
+        
+        ' A blank header and footer will have one return for some reason
+        ' Check if the footer contains an extra return
+        If footerText <> vbCr And (InStr(footerText, vbCr & vbCr) > 0 Or (InStr(footerText, vbCr) = 1 And pageindex <> 1)) Then
+            rng.Comments.Add rng, "Return found before or after the text in the footer. Per OPNAV Manual Ch 2: Do not add a return before or after the page number."
+            headfootcount = headfootcount + 1
+        End If
+         
+        ' Check if the header contains an extra return
+        If headerText <> vbCr And (InStr(headerText, vbCr & vbCr) > 0 Or (InStr(headerText, vbCr) = 1 And pageindex <> 1)) Then
+            rng.Comments.Add rng, "Header for page " & pageindex & " contains a return before or afer text. While blank lines in headers are not explicity prohibited in OPNAV Manual Ch 2, they do have a similar rule for footers."
+            headfootcount = headfootcount + 1
+        End If
+
+        ' Check Header or Footer for text
+        If pageindex = 1 Then
+            ' Check if footer is not blank for first page
+            If footerText <> vbCr Then
+                rng.Comments.Add rng, "Incorrect text found in first page footer. Per OPNAV Manual Ch 2: Page 1 does not get numbered."
+                headfootcount = headfootcount + 1
+            End If
+            ' Check that header is not blank for first page
+            If headerText = vbCr Then
+                rng.Comments.Add rng, "Header is blank. Per OPNAV Manual Ch 2: First page header should have e-letterhead with Department of the Navy in Times New Roman 10 and address in Times New Roman 8."
+                headfootcount = headfootcount + 1
+            End If
+        Else
+            If headerText = vbCr Then
+                rng.Comments.Add rng, "Header is blank for " & pageindex & " page. Per OPNAV Manual Ch 2: Non first page headers should have the issuing authority (OPNAV,SECNAV,BUMED,etc.) folowed by type of document, (INST,NOTE,etc.) then the SSIC Code and Date Signed. "
+                headfootcount = headfootcount + 1
+            End If
+            
+            If footerText = vbCr Then
+                rng.Comments.Add rng, "Footer for page " & pageindex & " does not contain any text. Every page is numbered with the exception of all page 1s. Per OPNAV Manual Ch 2: Page numbers start on the second page and are centered. Do not add a return before or after the page number."
+                headfootcount = headfootcount + 1
+            End If
+        End If
+    Next pageindex
+    
+    ' Send the Error report text back to the main program
+    HeadersAndFootersByPage = headfootcount & " instance(s) of Header/Footer text issues."
+End Function
+Function GetHeaderTextForPage(rng As range, pageindex As Integer, headfootcount As Integer) As String
+    ' Part of Sub HeadersAndFootersByPage
+    Dim sectionIndex As Integer
+    sectionIndex = rng.Information(wdActiveEndSectionNumber)
+    Dim headerText As String
+   
+    ' Check if it's the first page of the section
+    If IsFirstPageOfSection(rng) Then
+        headerText = GetHeaderText(rng, sectionIndex, wdHeaderFooterFirstPage, pageindex, headfootcount)
+    End If
+   
+    ' If no first page header, or not the first page, get the primary header
+    If headerText = "" Then
+        headerText = GetHeaderText(rng, sectionIndex, wdHeaderFooterPrimary, pageindex, headfootcount)
+    End If
+
+    GetHeaderTextForPage = headerText
+End Function
+Function GetFooterTextForPage(rng As range, pageindex As Integer, headfootcount As Integer) As String
+    ' Part of Sub HeadersAndFootersByPage
+    Dim sectionIndex As Integer
+    sectionIndex = rng.Information(wdActiveEndSectionNumber)
+    Dim footerText As String
+   
+    ' Check if it's the first page of the section
+    If IsFirstPageOfSection(rng) Then
+        footerText = GetFooterText(rng, sectionIndex, wdHeaderFooterFirstPage, pageindex, headfootcount)
+    End If
+   
+    ' If no first page footer, or not the first page, get the primary footer
+    If footerText = "" Then
+        footerText = GetFooterText(rng, sectionIndex, wdHeaderFooterPrimary, pageindex, headfootcount)
+    End If
+    
+    GetFooterTextForPage = footerText
+End Function
+Function IsFirstPageOfSection(rng As range) As Boolean
+    ' Part of Sub HeadersAndFootersByPage
+    ' Check if the range is on the first page of its section
+    
+    Dim sectionIndex As Integer
+    sectionIndex = rng.Information(wdActiveEndSectionNumber)
+    Dim sectionStartPage As Integer
+    sectionStartPage = ActiveDocument.range(ActiveDocument.Sections(sectionIndex).range.Start, _
+                                            ActiveDocument.Sections(sectionIndex).range.Start).Information(wdActiveEndPageNumber)
+    IsFirstPageOfSection = (rng.Information(wdActiveEndPageNumber) = sectionStartPage)
+End Function
+Function GetHeaderText(rng As range, sectionIndex As Integer, headerFooterType As WdHeaderFooterIndex, pageindex As Integer, headfootcount As Integer) As String
+    ' Part of Sub HeadersAndFootersByPage
+    Dim header As HeaderFooter
+    Dim headerRange As range
+    Dim firstCharDistance As Single
+    Dim currentCharDistance As Single
+    Dim isFirstLine As Boolean
+    Dim allSame As Boolean
+    Dim para As paragraph
+    
+    allSame = True
+    isFirstLine = True
+   
+    ' Check if the specific header type exists for the section
+    If ActiveDocument.Sections(sectionIndex).Headers(headerFooterType).Exists Then
+        Set header = ActiveDocument.Sections(sectionIndex).Headers(headerFooterType)
+        GetHeaderText = header.range.text
+    
+    
+        Set headerRange = header.range
+    
+        ' Check if the header lines are aligned to longest line
+        If pageindex <> 1 Then
+            For Each para In header.range.Paragraphs
+                    ' Get the horizontal distance of the first non-whitespace character
+                    currentCharDistance = GetFirstNonWhitespaceCharDistance(para.range)
+                    If isFirstLine Then
+                        firstCharDistance = currentCharDistance
+                        isFirstLine = False
+                    Else
+                        ' Compare distances. The horizontal position is being calculated very precisely including minor variations in character widths. Adding 0.5 to account for minor differences.
+                        If Abs(currentCharDistance - firstCharDistance) > 0.5 Then
+                            allSame = False
+                            Exit For
+                        End If
+                    End If
+                Next para
+            
+            ' add comment
+            If allSame = False Then
+                rng.Comments.Add rng, "Header lines are not in alignment. Per OPNAV Manual Ch 2:  Longest line is flushed to the right margin with the other lines in alignment."
+                headfootcount = headfootcount + 1
+            End If
+        End If
+    
+    Else
+        GetHeaderText = ""
+    End If
+End Function
+Function GetFooterText(rng As range, sectionIndex As Integer, headerFooterType As WdHeaderFooterIndex, pageindex As Integer, headfootcount As Integer) As String
+    ' Part of Sub HeadersAndFootersByPage
+    Dim footer As HeaderFooter
+    Dim footerRange As range
+   
+    ' Check if the specific footer type exists for the section
+    If ActiveDocument.Sections(sectionIndex).Footers(headerFooterType).Exists Then
+        Set footer = ActiveDocument.Sections(sectionIndex).Footers(headerFooterType)
+        GetFooterText = footer.range.text
+        
+        Set footerRange = footer.range
+    
+        Dim para As paragraph
+        
+        If pageindex <> 1 Then
+            For Each para In footerRange.Paragraphs
+                ' Ignore for footers that say enclosure
+                If para.range.text = footer.range.text And InStr(para.range.text, "enclosure") < 0 Then
+                    If para.Alignment <> wdAlignParagraphCenter Then
+                        rng.Comments.Add rng, "Footer is not centered. Per OPNAV Manual Ch 2: Page numbers start on the second page and are centered."
+                        headfootcount = headfootcount + 1
+                    End If
+                End If
+            Next para
+        End If
+    Else
+        GetFooterText = ""
+    End If
+End Function
+Function GetFirstNonWhitespaceCharDistance(rng As range) As Single
+    Dim i As Integer
+    Dim charPos As Integer
+    Dim charrng As range
+    Dim leftposition As Single
+   
+    ' Find the position of the first non-whitespace character
+    For charPos = 1 To Len(rng.text)
+        If Mid(rng.text, charPos, 1) <> " " And Mid(rng.text, charPos, 1) <> vbTab Then
+            Exit For
+        End If
+    Next charPos
+    
+    If charPos <= Len(rng.text) Then
+        Set charrng = rng.Duplicate
+        charrng.Start = rng.Start + charPos - 1
+        charrng.End = charrng.Start + 1
+        
+        ' Get leftposition
+        leftposition = charrng.Information(wdHorizontalPositionRelativeToPage)
+  
+        GetFirstNonWhitespaceCharDistance = leftposition
+    Else
+        GetFirstNonWhitespaceCharDistance = 0
+    End If
+End Function
+Sub DeleteAllComments()
+    Dim comment As comment
+
+    ' make sure you don't have a header footer selected
+    ActiveWindow.ActivePane.View.SeekView = wdSeekMainDocument
+
+    ' Iterate through all comments in the document
+    For Each comment In ActiveDocument.Comments
+        comment.Delete
+    Next comment
+End Sub
