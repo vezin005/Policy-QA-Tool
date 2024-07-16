@@ -2943,8 +2943,8 @@ Function CheckIndentationPatternAndLevel() As Integer
                 
             End If ' Expected indent
             
-            ' Check for correct tab width prior to pattern.Need to round tabposition because it is like 0.253308 etc.
-            If expectedstop <> Round(tabposition, 2) Then
+            ' Check for correct tab width prior to pattern.
+            If expectedstop <> tabposition Then
                 ' add comment
                 para.range.Comments.Add para.range, "Wrong tabstop found before '" & actualPattern & "'. The tabstop is " & tabposition & " but should be at " & expectedstop & " based on the pattern: " & actualPattern & ". Please correct if applicable."
                 
@@ -3066,7 +3066,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                             
                             'need to add code to check that the tabs after are good. tell the person what the tab needs to be or code that.
                             'Spaces come from another area in the code
-                            tabafter = para.range.Characters(i).Information(wdHorizontalPositionRelativeToTextBoundary) / 72
+                            tabafter = Round(para.range.Characters(i).Information(wdHorizontalPositionRelativeToTextBoundary) / 72, 2)
                    
                             Exit For
                         End If
@@ -3084,7 +3084,7 @@ Function CheckIndentationPatternAndLevel() As Integer
             Next i
             
             'Check tabstop after pattern. Need to round tabafter because it is like 0.253308 etc.
-            If Round(tabafter, 2) <> tabafterexpected Then
+            If tabafter <> tabafterexpected Then
                 'add comment
                 para.range.Comments.Add para.range, "Wrong tabstop found after '" & actualPattern & "'. The tabstop is " & tabafter & " but should be at " & tabafterexpected & " based on the pattern: '" & actualPattern & "'. Please correct if applicable."
                 
@@ -3402,8 +3402,8 @@ Function CountIndentation(ByVal rng As range, ByRef indentlength As Integer, ByR
         tabindicator = False
    End If
    
-    ' Not sure why but need to add 1 to get the right value
-    tabposition = rng.Characters(indentlength + 1).Information(wdHorizontalPositionRelativeToTextBoundary) / 72
+    ' Not sure why but need to add 1 to get the right value. Need to round tabposition because it is like 0.253308 etc.
+    tabposition = Round(rng.Characters(indentlength + 1).Information(wdHorizontalPositionRelativeToTextBoundary) / 72, 2)
 End Function
 Sub AddTabStops()
    ' adds tab stops to the document
@@ -3481,7 +3481,8 @@ Function margins() As String
         Else
             ' Check if Header is 1 inch for all other pages
             If headerheight <> 1 Then
-                rngPage.Collapse wdCollapseStart
+                rngPage.Collapse wdCollapseEnd
+                rngPage.Move Unit:=wdCharacter, count:=1
                 rngPage.Comments.Add rngPage, "Incorrect header margin " & headerheight & " inches found for page " & pageNum & ". Per OPNAV Manual Ch 2: Please correct header to 1 inch."
                 margincount = margincount + 1
             End If
