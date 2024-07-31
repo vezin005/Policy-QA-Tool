@@ -32,7 +32,7 @@ Sub Runall()
 
     ErrorMessages = "Error Report:" & vbCrLf
 
-    totalsteps = 19 'Adjust whenever you add a function below
+    totalsteps = 20 'Adjust whenever you add a function below
     
     ' Call Paragraph marks
     'EnsureParagraphMarksVisibility
@@ -43,92 +43,97 @@ Sub Runall()
     UpdateProgress currentstep, totalsteps
     
     ' Call Wordreplace
-    currentstep = 2
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & Wordreplace & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Promulgate
-    currentstep = 3
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & ForbiddenPhrasesWithComments & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Automaticnumbering
-    currentstep = 4
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CheckAutomaticNumberingWithComment & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Insert Space After Period
-    currentstep = 5
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & InsertSpaceAfterPeriodWithComments & vbCrLf
     UpdateProgress currentstep, totalsteps
     
+    ' Call Delete Extra Spaces between words(Letters and numbers)
+    currentstep = currentstep + 1
+    ErrorMessages = ErrorMessages & Correctspacesbetweenwords & vbCrLf
+    UpdateProgress currentstep, totalsteps
+    
     ' Call Contractions
-    currentstep = 6
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & ReplaceContractionsAndAddComments & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Quotation Marks
-    currentstep = 7
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CheckQuotationMarksPlacement & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Find Acronyms
-    currentstep = 8
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & FindAcronyms2 & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Find Echelon
-    currentstep = 9
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & ReplaceEchelon4 & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     'Call Underline Header Period check
-    currentstep = 10
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CommentUnderlinedText & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     'Call Virgule check
-    currentstep = 11
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CheckVirgules & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Number starting a sentence check
-    currentstep = 12
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CheckPeriodNumber & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Phone Number check
-    currentstep = 13
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CheckPhoneNumbersWithComments & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Date check
-    currentstep = 14
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CheckDateFormats & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Required Paragraph check
-    currentstep = 15
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & RequiredParagraphs & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call margin check
-    currentstep = 16
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & margins & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call paragraph spacing check
-    currentstep = 17
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CheckParagraphSpacing & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call paragraph spanning multiple pages
-    currentstep = 18
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & CheckParagraphSpan & vbCrLf
     UpdateProgress currentstep, totalsteps
     
     ' Call Header footer check
-    currentstep = 19
+    currentstep = currentstep + 1
     ErrorMessages = ErrorMessages & HeadersAndFootersByPage & vbCrLf
     UpdateProgress currentstep, totalsteps
     
@@ -1595,6 +1600,65 @@ Function InsertSpaceAfterPeriodWithComments() As String
     InsertSpaceAfterPeriodWithComments = totalSpacesAdded & " space(s) were added after periods, colons, right parenthesis, and semicolons."
 
 End Function
+
+Function Correctspacesbetweenwords() As String
+    Dim doc As Document
+    Dim srng As range
+    Dim regex As Object
+    Dim matches As Object
+    Dim match As Object
+    Dim totalspacecom As Integer
+    
+
+    ' Set the document object
+    On Error Resume Next
+    Set doc = ActiveDocument
+    On Error GoTo 0
+
+    If doc Is Nothing Then
+        MsgBox "Error: Could not access the document.", vbExclamation
+        Exit Function
+    End If
+
+    'Initialize count
+    totalspacecom = 0
+
+    Set doc = ActiveDocument
+    Set regex = CreateObject("VBScript.RegExp")
+    
+    ' Define the regex pattern to find two or more spaces between letters or numbers
+    regex.pattern = "([A-Za-z0-9]) {2,}([A-Za-z0-9])"
+    regex.Global = True
+    
+    ' Loop through all paragraphs in the document
+    For Each para In doc.Paragraphs
+        Set srng = para.range
+        Set matches = regex.Execute(srng.text)
+        
+        ' Loop through each match found by the regex
+        For Each match In matches
+            'Calculate the number of spaces found
+            numspaces = Len(match.Value) - Len(Replace(match.Value, " ", ""))
+            
+            ' Add a comment at the position of the spaces
+            srng.SetRange srng.Start + match.firstIndex, srng.Start + match.firstIndex + match.Length
+            
+            ' Removes the extra spaces. Commenting out because it will incorrectly transfer the formatting when deleting spaces
+            'srng.text = match.submatches(0) & " " & match.submatches(1)
+            
+            ' Add a comment indicating the the spaces need to be deleted
+            srng.Comments.Add srng, numspaces & " spaces were found between letters or numbers. Please review and correct to one space if applicable."
+        
+            ' Increment counter
+            totalspacecom = totalspacecom + 1
+        Next match
+    Next para
+    
+    ' Send the Error report text back to the main program
+    Correctspacesbetweenwords = totalspacecom & " instances of extra space(s) found between words."
+
+End Function
+
 Function ReplaceRomanNumeralsAfterEchelon() As Integer
     ' Replaces Roman numerals after "echelon" with corresponding numbers
 
@@ -2483,8 +2547,8 @@ Function RequiredParagraphs() As String
     requirecount = 0
     
     ' List of paragraph names to search for
-    'paraName = Array("Purpose", "Cancellation", "Scope and Applicability", "Policy", "Records Management", "Review and Effective Date", "Forms or Information Management Control")
-    paraName = Array("Purpose", "Scope and Applicability", "Records Management", "Review and Effective Date")
+    paraName = Array("Purpose", "Cancellation", "Scope and Applicability", "Policy", "Records Management", "Review and Effective Date", "Forms or Information Management Control")
+    'paraName = Array("Purpose", "Scope and Applicability", "Records Management", "Review and Effective Date")
 
     For Each para In paraName
         ' Set up the initial range
@@ -3889,3 +3953,6 @@ Sub DeleteAllComments()
         comment.Delete
     Next comment
 End Sub
+
+
+
