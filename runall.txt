@@ -144,7 +144,7 @@ Sub Runall()
     Application.StatusBar = False
     
     ' Check compete message
-    MsgBox "Ancilla Policy Check completed. Please review all comments and make corrections. If you have suggestions please contact Kyle Vezina at kyle.b.vezina.ctr@health.mil.", vbInformation, "Ancilla Policy Review"
+    MsgBox "Ancilla Policy Check completed. Please review all comments and make corrections. We recommend running the checker again after making corrections. If you have suggestions please contact Kyle Vezina at kyle.b.vezina.ctr@health.mil.", vbInformation, "Ancilla Policy Review"
 
     
 End Sub
@@ -375,8 +375,7 @@ Sub HighlightTextWithComments(doc As Document, searchText As String, alternative
     With rng.Find
         .ClearFormatting
         .text = searchText
-        .Replacement.ClearFormatting
-        .Replacement.Highlight = True
+        .Font.ColorIndex = wdColorBlack 'Hopefully this will ignore urls where the para exists, i.e. 'forms' in a url.
         .MatchWholeWord = True ' Set this to True to match whole words only
 
         Do While .Execute(Forward:=True, Format:=True) = True
@@ -559,7 +558,7 @@ Function ReplaceContractionsAndAddComments() As String
         ' Find the contraction ending within the document range
         Do While searchRange.Find.Execute(ending, MatchCase:=True, MatchWholeWord:=False)
             ' Add a comment at the location of the found contraction ending
-            commenttext = "Found '" & ending & "'. Per OPNAV Manual Ch 9: Contractions must not be used in Navy directives. Please correct if a contraction."
+            commenttext = "Found '" & ending & "'. Per OPNAV Manual Ch 9: Contractions must not be used in Navy directives. Please correct if applicable."
             searchRange.Comments.Add searchRange, commenttext
     
             ' Increment the total corrections count
@@ -712,7 +711,7 @@ Function CheckQuotationMarksPlacement() As String
     For i = LBound(findTextArray) To UBound(findTextArray)
         Do While rng.Find.Execute(findText:=findTextArray(i), Forward:=True)
             ' Add a comment to the location of the found text
-            doc.Comments.Add range:=rng, text:="Per OPNAV Manual Ch 9: periods and commas always go inside quotation marks"
+            doc.Comments.Add range:=rng, text:="Per OPNAV Manual Ch 9: periods and commas always go inside quotation marks. Please correct if applicable."
 
             ' Move the range to the end of the found text to continue the search
             rng.Collapse Direction:=wdCollapseEnd
@@ -2180,6 +2179,7 @@ Function CheckVirgules() As String
             .text = "/"
             .Forward = True
             .Wrap = wdFindStop
+            .Font.ColorIndex = wdColorBlack 'Hopefully this will ignore urls where the para exists, i.e. 'forms' in a url.
             Do While .Execute
                 ' Check if the "/" is part of a URL and not surrounded by numbers liek 5215/40
                 Dim rngnumber As range
@@ -2188,18 +2188,18 @@ Function CheckVirgules() As String
                 rngnumber.MoveStart Unit:=wdCharacter, count:=-1
                 rngnumber.MoveEnd Unit:=wdCharacter, count:=1
 
-                If Not IsInURL(rng) Then
-                    If Len(rngnumber.text) > 3 Then
-                        If Not (rngnumber.Characters(1).text Like "[0-9]" And rngnumber.Characters(3).text Like "[0-9]") Then
+                If Not IsInURL(rng) Then 'The wdColorBlack above should handle most of the urls because they would be blue
+                    'If Len(rngnumber.text) >= 3 Then
+                        If Not (rngnumber.Characters(1).text Like "[0-9]" And rngnumber.Characters(3).text Like "[0-9]") Then 'ignore numbers 5/6 etc.
                             ' Add a comment for virgule
                             rng.Comments.Add range:=rng, text:=commenttext
                             commentcount = commentcount + 1
                         End If
-                    Else
+                    'Else
                         ' Add a comment for virgule
-                        rng.Comments.Add range:=rng, text:=commenttext
-                        commentcount = commentcount + 1
-                    End If
+                        'rng.Comments.Add range:=rng, text:=commenttext
+                        'commentcount = commentcount + 1
+                    'End If
                 End If
             Loop
         End With
@@ -2220,7 +2220,7 @@ Function IsInURL(rngd As range) As Boolean
 
         Loop
 
-        ' Check if the left 6 characters contain "https"
+        ' Check if the left 6 characters contain "https" i.e. part of a website
         If InStr(1, Left(.text, 6), "http", vbTextCompare) > 0 Then
             IsInURL = True
         End If
@@ -2519,9 +2519,26 @@ Function RequiredParagraphs() As String
     ' Checks that there is 1 blank line between Releasability and distribution and the signature block
     ' Checks that there are 3 blank lines between the end of the text and the signature block
     ' Checks for both a “Responsibilities” and an “Action” paragraph. This still needs work
+    ' Checks that Purpose is 1. and Cancellation is 2. if applicable
+    ' Checks for the relative order of Scope, Policy, and Records Management
+    ' Checks that Review and Effective date or Forms is the last paragraph
 
     Dim doc As Document
     Dim rng As range
+    Dim toprng As range
+    Dim prange As range
+    Dim frange As range
+    Dim crange As range
+    Dim srange As range
+    Dim orange As range
+    Dim mrange As range
+    Dim erange As range
+    Dim irange As range
+    Dim drange As range
+    Dim searchRange As range
+    Dim searchRange2 As range
+    Dim foundRange As range
+    Dim foundRange2 As range
     Dim paraName As Variant
     Dim found As Boolean
     Dim found1 As Boolean
@@ -2529,7 +2546,13 @@ Function RequiredParagraphs() As String
     Dim requirecount As Integer
     Dim para As Variant
     Dim vcount As Integer
-    
+    Dim posScope As Long
+    Dim posPolicy As Long
+    Dim posRecords As Long
+    Dim posForms As Long
+    Dim posReview As Long
+    Dim posInfo As Long
+    Dim posreleasa As Long
     ' Deselect any selected comment cards or we get an error
     'DeselectComment
 
@@ -2543,12 +2566,23 @@ Function RequiredParagraphs() As String
         Exit Function
     End If
     
-    'Initialize phonecount
+    ' Initialize postion variables to -1
+    posScope = -1
+    posPolicy = -1
+    posRecords = -1
+    posForms = -1
+    posReview = -1
+    posInfo = -1
+    posreleasa = -1
+    
+    
+    ' Initialize phonecount
     requirecount = 0
     
-    ' List of paragraph names to search for
-    paraName = Array("Purpose", "Cancellation", "Scope and Applicability", "Policy", "Records Management", "Review and Effective Date", "Forms or Information Management Control")
+    ' List of paragraph names to search for( Can be eithr Forms, Forms and Information..., or Information...)
+    paraName = Array("Purpose", "Cancellation", "Scope and Applicability", "Policy", "Records Management", "Review and Effective Date", "Forms", "Information Management Control")
     'paraName = Array("Purpose", "Scope and Applicability", "Records Management", "Review and Effective Date")
+    'paraName = Array("Policy", "Scope and Applicability", "Records Management")
 
     For Each para In paraName
         ' Set up the initial range
@@ -2559,140 +2593,351 @@ Function RequiredParagraphs() As String
             .text = para
             .Format = True ' Consider formatting, such as underlining
             .Font.Underline = True ' Set the underline property
+            .MatchWholeWord = True ' Match only word as itself
+            .MatchCase = True   'Match captialization
+            .Font.ColorIndex = wdColorBlack 'Hopefully this will ignore urls where the para exists, i.e. 'forms' in a url.
         End With
         
         found = rng.Find.Execute
         
         If Not found Then
-        
-            Set rng = doc.range(0, 0)
+            'Set the comment range to the top of the document
+            Set toprng = doc.range(0, 0)
             
+            ' Known issue if Forms or another one of these words is found in a url.
             Select Case para
-                Case "Cancellation", "Policy", "Forms or Information Management Control"
+                Case "Cancellation", "Policy", "Forms", "Information Management Control"
                     ' Add a comment if paragraph is not found
-                    rng.Comments.Add rng, "Per OPNAV Manual Ch 9: Paragraph '" & para & "' is a required paragraph, if applicable. Either it was not found, not underlined, or spelled incorrectly. Please correct if applicable."
+                    toprng.Comments.Add toprng, "Per OPNAV Manual Ch 9: Paragraph '" & para & "' is a required paragraph, if applicable. Either it was not found, not underlined, or spelled incorrectly. Please correct if applicable."
                     requirecount = requirecount + 1
                 Case Else
                     ' Add a comment if paragraph is not found
-                    rng.Comments.Add rng, "Per OPNAV Manual Ch 9: Paragraph '" & para & "' is a required paragraph. Either it was not found, not underlined, or spelled incorrectly. Please correct if applicable."
+                    toprng.Comments.Add toprng, "Per OPNAV Manual Ch 9: Paragraph '" & para & "' is a required paragraph. Either it was not found, not underlined, or spelled incorrectly. Please correct if applicable."
                     requirecount = requirecount + 1
                 End Select
-        End If
+        Else 'para is found
         
-        ' Check that Purpose is on the first page
-        If para = "Purpose" And found Then
-            If rng.Information(wdActiveEndAdjustedPageNumber) <> 1 Then
-                ' Add a comment if paragraph is not found
-                rng.Comments.Add rng, "Per OPNAV Manual Ch 9: '" & para & "' must have at least 2 lines on the letterhead page. It is currently on page " & rng.Information(wdActiveEndAdjustedPageNumber) & ". Please correct if applicable."
-                requirecount = requirecount + 1
+            ' Check that Purpose is on the first page and the first paragraph
+            If para = "Purpose" Then
+                ' Create a new range including the paragraph number
+                Set prange = rng.Duplicate
+                prange.MoveStart wdCharacter, -3 ' Move start back by 3 characters to include tab and 1.
+    
+                ' Check that the new range includes 1.
+                If InStr(prange.text, "1.") = 0 Then
+                    prange.Comments.Add prange, "Per OPNAV Manual Ch 9: '" & para & "' is always the first paragraph. Ensure '1.' proceeds 'Purpose' and indenting is correct."
+                    requirecount = requirecount + 1
+                End If
+        
+                ' Check that Purpose is on the first page
+                If rng.Information(wdActiveEndAdjustedPageNumber) <> 1 Then
+                    ' Add a comment if paragraph is not found
+                    rng.Comments.Add rng, "Per OPNAV Manual Ch 9: '" & para & "' must have at least 2 lines on the letterhead page. It is currently on page " & rng.Information(wdActiveEndAdjustedPageNumber) & ". Please correct if applicable."
+                    requirecount = requirecount + 1
+                End If
+            End If
+            
+            ' Check that Cancellation is the second paragraph when applicable
+            If para = "Cancellation" Then
+                ' Create a new range including the paragraph number
+                Set crange = rng.Duplicate
+                crange.MoveStart wdCharacter, -3 ' Move start back by 3 characters to include tab and 2.
+    
+                ' Check that the new range includes 2.
+                If InStr(crange.text, "2.") = 0 Then
+                    crange.Comments.Add crange, "Per OPNAV Manual Ch 9: '" & para & "' is always the second paragraph, when applicable. Ensure '2.' proceeds 'Cancellation' and indenting is correct."
+                    requirecount = requirecount + 1
+                End If
+            End If
+        
+            ' Get Forms position
+            If para = "Forms" Then
+                ' Create a new range including the paragraph number
+                Set frange = rng.Duplicate
+                'Move the postion to after Review. Otherwise it finds Review as unerlined in the Search Range
+                frange.Collapse wdCollapseEnd
+                frange.MoveStart Unit:=wdWord, count:=1
+                frange.MoveEnd Unit:=wdWord, count:=2
+                posForms = frange.Start
+            End If
+            
+            ' Get Information management Control position
+            If para = "Information Management Control" Then
+                ' Create a new range including the paragraph number
+                Set irange = rng.Duplicate
+                'Move the postion to after Review. Otherwise it finds Review as unerlined in the Search Range
+                irange.Collapse wdCollapseEnd
+                irange.MoveStart Unit:=wdWord, count:=1
+                irange.MoveEnd Unit:=wdWord, count:=2
+                posInfo = irange.Start
+            End If
+            
+            ' Get Review position
+            If para = "Review and Effective Date" Then
+                ' Create a new range including the paragraph number
+                Set erange = rng.Duplicate
+                'Move the postion to after Review. Otherwise it finds Review as unerlined in the Search Range
+                erange.Collapse wdCollapseEnd
+                erange.MoveStart Unit:=wdWord, count:=1
+                erange.MoveEnd Unit:=wdWord, count:=2
+                'erange.Comments.Add range:=erange, text:="found"
+                posReview = erange.End
+            End If
+        
+            ' Find positions for Scope, Policy and Records
+            If para = "Scope and Applicability" Then
+                Set srange = rng.Duplicate
+                posScope = srange.Start
+            End If
+            
+            If para = "Policy" Then
+                Set orange = rng.Duplicate
+                posPolicy = orange.Start
+            End If
+            
+            If para = "Records Management" Then
+                Set mrange = rng.Duplicate
+                posRecords = mrange.Start
             End If
         End If
     Next para
     
-    'Search for Releasability and distribution
+    ' Check the order of Scope, Policy, and Records Management
+    If posScope <> -1 And posRecords <> -1 Then
+        If posPolicy = -1 Then ' Policy is not present, check Scope and Records position
+            If posScope > posRecords Then
+                ' Add a comment if order is incorrect
+                mrange.Comments.Add mrange, "'Records Management' found before 'Scope and Applicability'. Per OPNAV Manual Ch 9: 'Scope and Applicability' comes before 'Records Management'."
+                requirecount = requirecount + 1
+            End If
+        Else 'Policy is present, check full order
+            If posScope > posPolicy Or posRecords < posPolicy Then
+                ' Add a comment if order is incorrect
+                orange.Comments.Add orange, "Incorrect order of required paragraphs. Per OPNAV Manual Ch 9: the relative order of the following required paragraphs is 'Scope and Applicability' followed by 'Policy' followed by 'Records Management.' Please correct if applicable."
+                requirecount = requirecount + 1
+            End If
+        End If
+    End If
+     
+    ' Search for Releasability and distribution
+    ' Reset the Range
+    Set rng = doc.Content
     
-        ' Set up the initial range
-        Set rng = doc.Content
+    ' Find the location of the text this is not underlined
+    With rng.Find
+        .text = "Releasability and distribution:"
+        .Format = True ' Consider formatting, such as underlining
+        .Font.Underline = False  ' Set the underline property to false for no underline for Releasability
+        .MatchCase = True   'Match captialization d is not capitalized in distribution
+    End With
+    
+    found = rng.Find.Execute
+    
+    If Not found Then
+        Set rng = doc.range(0, 0)
+        ' Add a comment if paragraph is not found
+        rng.Comments.Add rng, "Per OPNAV Manual Ch 2: Paragraph 'Releasability and distribution' is a required paragraph. Either it was not found, incorrectly underlined, or spelled incorrectly. Please correct if applicable."
+        requirecount = requirecount + 1
+    Else
         
-        ' Find the location of the underlined text
-        With rng.Find
-            .text = "Releasability and distribution"
-            .Format = True ' Consider formatting, such as underlining
-        End With
-        
-        found = rng.Find.Execute
-        
-        If Not found Then
-            Set rng = doc.range(0, 0)
-            ' Add a comment if paragraph is not found
-            rng.Comments.Add rng, "Per OPNAV Manual Ch 2: Paragraph 'Releasability and distribution' is a required paragraph. Either it was not found, or spelled incorrectly. Please correct if applicable."
+        ' set position of Releaseability for forms and review check below
+            Set drange = rng.Duplicate
+            'Move the postion to before Releasability
+            drange.Collapse wdCollapseStart
+            drange.MoveStart Unit:=wdWord, count:=-1
+            posreleasa = drange.Start
+
+        ' Check for 2 returns from the signature block
+        If rng.Characters.First.Previous.text <> vbCr Or rng.Characters.First.Previous.Previous.text <> vbCr Then
+            ' Add a comment
+            rng.Comments.Add rng, "Per OPNAV Manual Ch 2: 1 blank line (2 returns) is required from the signature block to the releasability and distribution block. Please correct if applicable."
             requirecount = requirecount + 1
-        Else
-            If rng.Characters.First.Previous.text <> vbCr Or rng.Characters.First.Previous.Previous.text <> vbCr Then
-                ' Add a comment
-                rng.Comments.Add rng, "Per OPNAV Manual Ch 2: 1 blank line (2 returns) is required from the signature block to the releasability and distribution block. Please correct if applicable."
-                requirecount = requirecount + 1
-            End If
-            
-            If (rng.Characters.First.Previous.text = vbCr And rng.Characters.First.Previous.Previous.text = vbCr And rng.Characters.First.Previous.Previous.Previous.text = vbCr) Then
-                ' Add a comment
-                rng.Comments.Add rng, "Too many blank lines were found. Per OPNAV Manual Ch 2: Only 1 blank line (2 returns) is required from the signature block to the releasability and distribution block. Please correct if applicable."
-                requirecount = requirecount + 1
-            End If
-            
-            ' Check that there are 3 lines between the end of the text and the signature block
-            Set releasep = rng.Paragraphs(1)
-            
-            ' If blank line before release then do this section otherwise skip
-            If rng.Characters.First.Previous.text = vbCr And rng.Characters.First.Previous.Previous.text = vbCr Then
-                Do While releasep.range.text <> vbCr
-                    Set releasep = releasep.Previous
-                Loop
-                Do While releasep.range.text = vbCr
-                    Set releasep = releasep.Previous
-                Loop
-            End If
-            
-            ' continue up the signature block
-            ' if there are no blank lines before signature block then it will go up the last paragraph
-            ' and then there is only 1 blank line between paragraphs which will still trigger a comment and
-            ' should alert the reviewer that something is up
+        End If
+        
+        If (rng.Characters.First.Previous.text = vbCr And rng.Characters.First.Previous.Previous.text = vbCr And rng.Characters.First.Previous.Previous.Previous.text = vbCr) Then
+            ' Add a comment
+            rng.Comments.Add rng, "Too many blank lines were found. Per OPNAV Manual Ch 2: Only 1 blank line (2 returns) is required from the signature block to the releasability and distribution block. Please correct if applicable."
+            requirecount = requirecount + 1
+        End If
+        
+        ' Check that there are 3 lines between the end of the text and the signature block
+        Set releasep = rng.Paragraphs(1)
+        
+        ' If blank line before release then do this section otherwise skip
+        If rng.Characters.First.Previous.text = vbCr And rng.Characters.First.Previous.Previous.text = vbCr Then
             Do While releasep.range.text <> vbCr
                 Set releasep = releasep.Previous
             Loop
-            
-            'Count blank lines
-            vcount = 0
             Do While releasep.range.text = vbCr
                 Set releasep = releasep.Previous
-                vcount = vcount + 1
             Loop
-            
-            ' 3 blank lines required
-            If vcount <> 3 Then
-            ' Add a comment
-                releasep.range.Comments.Add releasep.range, vcount & " blank lines found before signature block. Per OPNAV Manual Ch 2: 3 blank lines (4 returns) are required from the body of the text to the signature block. Please correct if applicable."
-                requirecount = requirecount + 1
-            End If
         End If
         
-        'Still needs work because if Roles and Responsibilities is underlined it counts that as finding Responsibilities by itself.
-        'Search for Responsibility, search for Action
-        'Not necessary and not common to have both a “Responsibilities” and an “Action” paragraph
-    
-        ' Set up the initial range
-        Set rng = doc.Content
+        ' continue up the signature block
+        ' if there are no blank lines before signature block then it will go up the last paragraph
+        ' and then there is only 1 blank line between paragraphs which will still trigger a comment and
+        ' should alert the reviewer that something is up
+        Do While releasep.range.text <> vbCr
+            Set releasep = releasep.Previous
+        Loop
         
-        ' Find the location of the underlined text
-        With rng.Find
-            .text = "Responsibilities"
-            .Format = True ' Consider formatting, such as underlining
-            .Font.Underline = True ' Set the underline property
-            .MatchWholeWord = True ' Match only Responsibilities as itself
-        End With
+        ' Count blank lines
+        vcount = 0
+        Do While releasep.range.text = vbCr
+            Set releasep = releasep.Previous
+            vcount = vcount + 1
+        Loop
         
-        'MsgBox rng.Find.text
-        
-        found1 = rng.Find.Execute
-        
-                ' Set up the initial range
-        Set rng = doc.Content
-        
-        ' Find the location of the underlined text
-        With rng.Find
-            .text = "Action"
-            .Format = True ' Consider formatting, such as underlining
-            .Font.Underline = True ' Set the underline property
-            .MatchWholeWord = True ' Match only Action as itself
-        End With
-        
-        found2 = rng.Find.Execute
-        
-        If found1 And found2 Then
-            ' Add a comment if paragraph is not found
-            rng.Comments.Add rng, "Per OPNAV Manual Ch 2: It is not necessary and not common to have both a 'Responsibilities' and an 'Action' paragraph. Please correct if applicable."
+        ' 3 blank lines required
+        If vcount <> 3 Then
+        ' Add a comment
+            releasep.range.Comments.Add releasep.range, vcount & " blank lines found before signature block. Per OPNAV Manual Ch 2: 3 blank lines (4 returns) are required from the body of the text to the signature block. Please correct if applicable."
             requirecount = requirecount + 1
         End If
+    End If
+        
+    ' Check that Review and Effective Date is last unless the directive contains forms or informaiton Management control
+    If posReview <> -1 And posreleasa <> -1 Then
+        If posInfo <> -1 Or posForms <> -1 Then '
+            If posInfo <> -1 And posForms <> -1 Then
+                ' Define the search between Info control and Releasability
+                Set searchRange = doc.range(posInfo, posreleasa)
+                ' Define the search between Review and Forms
+                Set searchRange2 = doc.range(posReview, posForms)
+            Else
+                If posInfo <> -1 Then
+                    ' Define the search between Info control and Releasability
+                    Set searchRange = doc.range(posInfo, posreleasa)
+                    ' Define the search between Review and Forms
+                    Set searchRange2 = doc.range(posReview, posInfo)
+                ElseIf posForms <> -1 Then
+                    ' Define the search between forms and Releasability
+                    Set searchRange = doc.range(posForms, posreleasa)
+                    ' Define the search between Review and Forms
+                    Set searchRange2 = doc.range(posReview, posForms)
+                End If
+            End If
+            
+            ' Check for Title headers between Forms and Review or Info and review
+            ' Initialize the found range
+            Set foundRange2 = searchRange2.Duplicate
+            
+            ' Infinite
+            ' Check if Review or Froms are not the last paragraph by searching for underlined text after that is not a url
+            With foundRange2.Find
+                .ClearFormatting
+                .Format = True ' Consider formatting, such as underlining
+                .Font.Underline = True ' Set the underline property
+                '.text = ""
+                .Forward = True
+                .Font.ColorIndex = wdColorBlack 'Hopefully this will ignore urls where the para exists, i.e. 'forms' in a url.
+            
+                ' Execute the find operation
+                    Do While .Execute
+                        If posInfo <> -1 And posForms <> -1 Or posFoms <> -1 Then
+                            If foundRange2.End > posForms Then Exit Do 'Exit if the search range has moved beyond the limit
+                        Else
+                            If posInfo <> -1 Then
+                                If foundRange2.End > posInfo Then Exit Do 'Exit if the search range has moved beyond the limit
+                            End If
+                        End If
+                            ' Check if range is not website url
+                            If InStr(foundRange2.text, "http") = 0 Then
+                                If foundRange2.text Like "*[A-Za-z]*" Then ' Sometimes blank spaces are formatted with underline and we don't want that to trigger
+                                    ' Add a comment
+                                    foundRange2.Comments.Add foundRange2, "Title/Header found between 'Review and Effective Date' and 'Forms and Information Managmenet Control.' Per OPNAV Manual Ch 9: 'Review and Effective Date' is the last paragraph, unless the directive contains a 'forms' or 'information management control' paragraph. Please move this paragraph before 'Review and Effective Date' if applicable."
+                                    requirecount = requirecount + 1
+                                End If
+                            End If
+                        ' Move the search range to the next character after the found text
+                        foundRange2.Collapse wdCollapseEnd
+                    Loop
+            End With
+        Else
+            ' Define the search between forms and Releasability
+            Set searchRange = doc.range(Start:=posReview, End:=posreleasa)
+        End If
+        
+        ' Initialize the found range
+        Set foundRange = searchRange.Duplicate
+        
+        ' Infinite
+        ' Check if Review or Froms are not the last paragraph by searching for underlined text after that is not a url
+        With foundRange.Find
+            .ClearFormatting
+            .Format = True ' Consider formatting, such as underlining
+            .Font.Underline = True ' Set the underline property
+            '.text = ""
+            .Forward = True
+            .Font.ColorIndex = wdColorBlack 'Hopefully this will ignore urls where the para exists, i.e. 'forms' in a url.
+            
+            ' Execute the find operation
+                Do While .Execute
+                    If foundRange.End > posreleasa Then Exit Do 'Exit if the search range has moved beyond the limit
+                        ' Check if range is not website url
+                        If InStr(foundRange.text, "http") = 0 Then
+                            If foundRange.text Like "*[A-Za-z]*" Then ' Sometimes blank spaces are formatted with underline and we don't want that to trigger
+                                ' Add a comment
+                                foundRange.Comments.Add foundRange, "Title/Header found after 'Review and Effective Date'. Per OPNAV Manual Ch 9: 'Review and Effective Date' is the last paragraph, unless the directive contains a 'forms' or 'information management control' paragraph. Please move this paragraph before 'Review and Effective Date' if applicable."
+                                requirecount = requirecount + 1
+                            End If
+                        End If
+                    ' Move the search range to the next character after the found text
+                    foundRange.Collapse wdCollapseEnd
+                Loop
+        End With
+    Else ' Either Review and Effective Date or Releasability and distribution was not found
+        If Not found Then  'using found from releasability check earlier
+            Set rng = doc.range(0, 0)
+            ' Add a comment if paragraph is not found
+            rng.Comments.Add rng, "Either 'Review and Effective Date' or 'Releasability and distribution' was not found, incorrectly underlined, or spelled incorrectly. Please correct if applicable and run again."
+            requirecount = requirecount + 1
+        Else
+            ' Add a comment if paragraph is not found
+            releasep.range.Comments.Add releasep.range, "Either 'Review and Effective Date' or 'Releasability and distribution' was not found, incorrectly underlined, or spelled incorrectly. Please correct if applicable and run again."
+            requirecount = requirecount + 1
+        End If
+    End If
+        
+    ' Still needs work because if Roles and Responsibilities is underlined it counts that as finding Responsibilities by itself.
+    ' Search for Responsibility, search for Action
+    ' Not necessary and not common to have both a “Responsibilities” and an “Action” paragraph
+
+    ' Set up the initial range
+    Set rng = doc.Content
+    
+    ' Find the location of the underlined text
+    With rng.Find
+        .text = "Responsibilities"
+        .Format = True ' Consider formatting, such as underlining
+        .Font.Underline = True ' Set the underline property
+        .MatchWholeWord = True ' Match only Responsibilities as itself
+        .MatchCase = True   'Match captialization
+        .Font.ColorIndex = wdColorBlack 'Hopefully this will ignore urls where the para exists, i.e. 'forms' in a url.
+    End With
+    
+    found1 = rng.Find.Execute
+    
+    ' Set up the initial range
+    Set rng = doc.Content
+    
+    ' Find the location of the underlined text
+    With rng.Find
+        .text = "Action"
+        .Format = True ' Consider formatting, such as underlining
+        .Font.Underline = True ' Set the underline property
+        .MatchWholeWord = True ' Match only Action as itself
+        .MatchCase = True   'Match captialization
+        .Font.ColorIndex = wdColorBlack 'Hopefully this will ignore urls where the para exists, i.e. 'forms' in a url.
+    End With
+    
+    found2 = rng.Find.Execute
+    
+    If found1 And found2 Then
+        ' Add a comment if paragraph is not found
+        rng.Comments.Add rng, "Per OPNAV Manual Ch 2: It is not necessary and not common to have both a 'Responsibilities' and an 'Action' paragraph. Please correct if applicable."
+        requirecount = requirecount + 1
+    End If
         
     ' Send the Error report text back to the main program
     RequiredParagraphs = requirecount & " mising paragraph(s)."
@@ -2749,7 +2994,8 @@ Function CheckIndentationPatternAndLevel() As Integer
     Dim spaces As Integer
     Dim tabs As Integer
     Dim previousline As Integer
-
+    Dim commentunder As String
+    Dim commentsolo As String
 
     ' Deselect any selected comment cards or we get an error
     'DeselectComment
@@ -2763,6 +3009,11 @@ Function CheckIndentationPatternAndLevel() As Integer
         MsgBox "Error: Could not access the document.", vbExclamation
         Exit Function
     End If
+    
+    'Set the comment text for later on
+    commentunder = "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+    commentsolo = "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+
     
            'Dim Responsetab As VbMsgBoxResult
         ' Ask the user if they want to run the tabstops
@@ -3086,7 +3337,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 If expectedPattern <> actualPattern Then
                 ' increase comment counter by 1
                 indentcount = indentcount + 1
-                para.range.Comments.Add para.range, "Wrong pattern found. Pattern '" & actualPattern & "' should be '" & expectedPattern & "' based on current indent."
+                para.range.Comments.Add para.range, "Wrong paragraph list pattern found. Pattern '" & actualPattern & "' should be '" & expectedPattern & "' based on current indent."
                 End If
             End If ' expectedPattern <> actualPattern
             
@@ -3155,16 +3406,14 @@ Function CheckIndentationPatternAndLevel() As Integer
                 'increase comment counter by 1
                 indentcount = indentcount + 1
             End If
-            
-            
-            
+
            'Update the level counts
             If level = 1 Then
             
                 titlecount1 = titlecount1 + titlecount
                     'Title consistency check
                     If titlecount1 > 0 And titlecount1 <> count Then
-                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        para.range.Comments.Add para.range, commentunder
                         indentcount = indentcount + 1
                         'helps reduce additional comments when issue is found
                         titlecount1 = count
@@ -3174,7 +3423,7 @@ Function CheckIndentationPatternAndLevel() As Integer
 
                     'Solo A check
                     If countlevel2 = 2 Or countlevel3 = 2 Or countlevel4 = 2 Or countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
-                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        para.range.Comments.Add para.range, commmentsolo
                         indentcount = indentcount + 1
                     End If
                     
@@ -3202,7 +3451,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 titlecount2 = titlecount2 + titlecount
                     'Title consistency check
                     If titlecount2 > 0 And titlecount2 <> countlevel2 Then
-                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        para.range.Comments.Add para.range, commentunder
                         indentcount = indentcount + 1
                         'helps reduce additional comments when issue is found
                         titlecount2 = countlevel2
@@ -3212,7 +3461,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 
                     'solo A check
                     If countlevel3 = 2 Or countlevel4 = 2 Or countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
-                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        para.range.Comments.Add para.range, commentsolo
                         indentcount = indentcount + 1
                     End If
                     'MsgBox nextPattern
@@ -3238,7 +3487,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 titlecount3 = titlecount3 + titlecount
                     'Title consistency check
                     If titlecount3 > 0 And titlecount3 <> countlevel3 Then
-                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        para.range.Comments.Add para.range, commentunder
                         indentcount = indentcount + 1
                         'helps reduce additional comments when issue is found
                         titlecount3 = countlevel3
@@ -3248,7 +3497,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 
                     'solo A check
                     If countlevel4 = 2 Or countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
-                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        para.range.Comments.Add para.range, commentsolo
                         indentcount = indentcount + 1
                     End If
 
@@ -3271,7 +3520,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 titlecount4 = titlecount4 + titlecount
                     'Title consistency check
                     If titlecount4 > 0 And titlecount4 <> countlevel4 Then
-                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        para.range.Comments.Add para.range, commentunder
                         indentcount = indentcount + 1
                         'helps reduce additional comments when issue is found
                         titlecount4 = countlevel4
@@ -3281,7 +3530,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 
                     'solo A check
                     If countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
-                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        para.range.Comments.Add para.range, commentsolo
                         indentcount = indentcount + 1
                     End If
                     
@@ -3302,7 +3551,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 titlecount5 = titlecount5 + titlecount
                     'Title consistency check
                     If titlecount5 > 0 And titlecount5 <> countlevel5 Then
-                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        para.range.Comments.Add para.range, commentunder
                         indentcount = indentcount + 1
                         'helps reduce additional comments when issue is found
                         titlecount5 = countlevel5
@@ -3313,7 +3562,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 
                     'solo A check
                     If countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
-                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        para.range.Comments.Add para.range, commentsolo
                         indentcount = indentcount + 1
                     End If
                     
@@ -3332,7 +3581,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 titlecount6 = titlecount6 + titlecount
                     'Title consistency check
                     If titlecount6 > 0 And titlecount6 <> countlevel6 Then
-                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        para.range.Comments.Add para.range, commentunder
                         indentcount = indentcount + 1
                         'helps reduce additional comments when issue is found
                         titlecount6 = countlevel6
@@ -3343,7 +3592,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 
                     'solo A check
                     If countlevel7 = 2 Or countlevel8 = 2 Then
-                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        para.range.Comments.Add para.range, commentsolo
                         indentcount = indentcount + 1
                     End If
                     
@@ -3360,7 +3609,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 titlecount7 = titlecount7 + titlecount
                     'Title consistency check
                     If titlecount7 > 0 And titlecount7 <> countlevel7 Then
-                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        para.range.Comments.Add para.range, commentunder
                         indentcount = indentcount + 1
                         'helps reduce additional comments when issue is found
                         titlecount7 = countlevel7
@@ -3371,7 +3620,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 
                     'solo A check
                     If countlevel8 = 2 Then
-                        para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                        para.range.Comments.Add para.range, commentsolo
                         indentcount = indentcount + 1
                     End If
 
@@ -3386,7 +3635,7 @@ Function CheckIndentationPatternAndLevel() As Integer
                 titlecount8 = titlecount8 + titlecount
                     'Title consistency check
                     If titlecount8 > 0 And titlecount8 <> countlevel8 Then
-                        para.range.Comments.Add para.range, "Inconsistent title underlining found in paragarph/subparagraph. Per OPNAV Manual Ch 9: Be consistent with the use of paragraph titles and headers within each paragraph and subparagraph section.  For example, if subparagraphs 1a and 1b have a title, subparagraphs 1c, 1d, and 1e also must have a paragraph title."
+                        para.range.Comments.Add para.range, commentunder
                         indentcount = indentcount + 1
                         'helps reduce additional comments when issue is found
                         titlecount8 = countlevel8
@@ -3408,7 +3657,7 @@ Function CheckIndentationPatternAndLevel() As Integer
             
                 'solo A check. What if there is a solo paragraph at the end
                 If countlevel2 = 2 Or countlevel3 = 2 Or countlevel4 = 2 Or countlevel5 = 2 Or countlevel6 = 2 Or countlevel7 = 2 Or countlevel8 = 2 Then
-                    para.range.Comments.Add para.range, "Solo paragraph found above. Per OPNAV Manual Ch 9: Never have a paragraph “1” unless there is, at a minimum, also a paragraph “2,” and never have a subparagraph “2a” unless there is also, at a minimum, a subparagraph “2b,” etc."
+                    para.range.Comments.Add para.range, commentsolo
                     indentcount = indentcount + 1
                 End If
                 
@@ -3953,6 +4202,7 @@ Sub DeleteAllComments()
         comment.Delete
     Next comment
 End Sub
+
 
 
 
